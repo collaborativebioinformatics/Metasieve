@@ -26,5 +26,5 @@ Foldseek
 ## Workflow Overview
 
 
-
+![](Spelunking.png)
 
