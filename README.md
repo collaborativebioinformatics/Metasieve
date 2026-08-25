@@ -26,5 +26,5 @@ Foldseek
 ## Workflow Overview
 
 
-![](metasieve.png)
+![](metasieve_overview.png)
 
