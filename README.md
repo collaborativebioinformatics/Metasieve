@@ -1,4 +1,4 @@
-# Metagenomics Group 5 Hackathon 2026
+# Metagenomics_Spelunking
 
 Mining environmental metagenomes for deeply novel biological sequence and structure
 
