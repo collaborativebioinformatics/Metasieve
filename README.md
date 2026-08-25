@@ -1,12 +1,26 @@
 # Metagenomics Group 5 Hackathon 2026
-Research Question 
+
+Mining environmental metagenomes for deeply novel biological sequence and structure
+
+This is a metagenomic bioprospecting workflow designed to identify
+environmental DNA and protein sequences that remain unexplained after
+taxonomic, functional, and structural database searches.
 
 ## Team 
 Dr. Todd Treangen\
-Felix Quintana\
 Dr. Jennifer Lu\
-Natalie Kokroko\
 Hiba Ben Aribi\
 Francesco Picchi\
+Felix Quintana\
+Natalie Kokroko\
+Jingyue Wu
+
+
+## Software Requirements
+Metaspades\
+Kraken2\
+Seqscreen\
+Foldseek
+
 
 
