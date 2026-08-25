@@ -20,6 +20,7 @@ Jingyue Wu
 Metaspades\
 Kraken2\
 Seqscreen\
+ESMFold
 Foldseek
 
 
