@@ -1,4 +1,4 @@
-# Metagenomics_Spelunking
+# Metasieve
 
 Mining environmental metagenomes for deeply novel biological sequence and structure
 
