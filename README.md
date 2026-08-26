@@ -13,7 +13,8 @@ Hiba Ben Aribi\
 Francesco Picchi\
 Felix Quintana\
 Natalie Kokroko\
-Jingyue Wu
+Jingyue Wu\
+Mohamed Abdelrahim
 
 
 ## Software Requirements
