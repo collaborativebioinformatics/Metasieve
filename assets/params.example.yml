@@ -1,0 +1,27 @@
+# Example parameter file. Copy and edit, then run:
+#   python main.py --config params.yml
+
+reads: 'data/*_{1,2}.fastq.gz'
+outdir: results
+
+kraken_db: /data/dbs/kraken2
+seqscreen_db: /data/dbs/seqscreen_databases
+
+# Hugging Face ESMFold (facebook/esmfold_v1 by default).
+# Use a local snapshot path for fully offline runs.
+esmfold_model: facebook/esmfold_v1
+esmfold_cache: /data/models/huggingface
+esmfold_device: auto
+esmfold_num_recycles: 4
+esmfold_chunk_size: 128
+
+min_contig_len: 200
+min_orf_aa: 50
+max_orf_aa: 1024
+require_orf_start: true
+
+skip_esmfold: false
+
+threads: 16
+memory_gb: 64
+kraken2_confidence: 0.01
