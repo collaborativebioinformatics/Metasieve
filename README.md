@@ -60,7 +60,6 @@ Mohamed Abdelrahim
     --databases SeqScreenDB_23.4 \
     --working seqscreen_out \
     --threads 16 \
-    --mode fast
 ```
 
 ## Ongoing/Upcoming Projects (Updated 9AM CST 2026/08/27)
