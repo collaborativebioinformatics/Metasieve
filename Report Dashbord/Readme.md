@@ -23,3 +23,5 @@ This is a draft code of dashbord of anlysis summary :
 3. put ChimeraX-1.12.exe  in downloaded folder and set it as cd
    
 4. run main.py
+
+Note : the current code uses test data for visualization purposes,  later it will use the main pipeline output files 
