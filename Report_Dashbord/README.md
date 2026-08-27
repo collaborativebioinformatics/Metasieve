@@ -9,7 +9,7 @@ This is a draft of the Metasieve Dashboard
 2. Show the final unclassified sequences and their relevant data
    <img width="1859" height="442" alt="img2" src="https://github.com/user-attachments/assets/ccc0da42-1ec2-43bd-9e81-20b8532b2d48" />
 
-3. Bonus : Uses Chimera to predict structure 
+3. Bonus : Uses Chimera to display predict structure 
 
 <img width="1578" height="897" alt="img3" src="https://github.com/user-attachments/assets/c3711543-36f3-459b-8601-2a18d1b2e8aa" />
 
