@@ -18,11 +18,11 @@ Mohamed Abdelrahim
 
 
 ## Software Requirements
-Metaspades\
-Kraken2\
-Seqscreen\
-ESMFold\
-Foldseek
+1. [MEGAHIT](https://github.com/voutcn/megahit)
+2. [Kraken2](https://github.com/DerrickWood/kraken2/)
+3. [Seqscreen](https://gitlab.com/treangenlab/seqscreen)
+4. [ESMFold](https://esmatlas.com/)
+5. [Foldseek](https://github.com/steineggerlab/foldseek)
 
 ## Workflow Overview
 
@@ -32,7 +32,8 @@ Foldseek
 ## Required Data
 1. [Kraken2 Database: k2\_pluspf\_20260626.tar.gz](https://benlangmead.github.io/aws-indexes/k2): 
 2. [Wastewater Metagenomic dataset 1](https://www.ncbi.nlm.nih.gov/sra/SRX34378765[accn])
-2. [Wastewater Metagenomic dataset 2](https://www.ncbi.nlm.nih.gov/sra/SRX34378760[accn])
+3. [Wastewater Metagenomic dataset 2](https://www.ncbi.nlm.nih.gov/sra/SRX34378760[accn])
+4. [Cacao Soil Metagenomics](https://www.ncbi.nlm.nih.gov/sra/SRX34351257[accn])
 
 ## Command Line
 ```
@@ -42,11 +43,11 @@ Foldseek
  fasterq-dump \
     --temp $TMPDIR \
     --split-files SRR000001
- spades.py \
+ megahit \
     -1 SRR000001_1.fastq.gz \
     -2 SRR000001_2.fastq.gz \
-    --meta \
-    -o SRR000001_spades 
+    -t $THREADS \
+    -o SRR000001_megahit 
  kraken2 \
     --db $KRAKEN_DB \
     --threads 16 \
