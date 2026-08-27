@@ -7,13 +7,12 @@ environmental DNA and protein sequences that remain unexplained after
 taxonomic, functional, and structural database searches.
 
 ## Team 
-Dr. Todd Treangen\
-Dr. Jennifer Lu\
+Dr. Todd Treangen, Rice University\
+Dr. Jennifer Lu, The Johns Hopkins University\
 Hiba Ben Aribi\
-Francesco Picchi\
-Felix Quintana\
-Natalie Kokroko\
-Jingyue Wu\
+Felix Quintana, Rice University\
+Natalie Kokroko, Rice University\
+Jingyue Wu, Baylor College of Medicine\
 Mohamed Abdelrahim
 
 
