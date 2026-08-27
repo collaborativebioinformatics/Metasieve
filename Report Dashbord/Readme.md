@@ -1,6 +1,6 @@
 This is a draft code of dashbord of anlysis summary :
 #### Idea 
-![Uploading 7.png…]()
+ <img width="1693" height="929" alt="7" src="https://github.com/user-attachments/assets/2f10a971-c8c4-4f07-951e-89ceb811dc12" />
 
 
 #### Output
