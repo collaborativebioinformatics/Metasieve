@@ -63,7 +63,7 @@ Mohamed Abdelrahim
     --mode fast
 ```
 
-## Ongoing/Upcoming Projects (Updated 9AM CST 2026/08/27
+## Ongoing/Upcoming Projects (Updated 9AM CST 2026/08/27)
 1. Run full pipeline (start to finish) on cacao soil test-set
 2. Run full pipeline (start to finish) on Wastewater dataset
 3. Incorporate human genome removal (bowtie2 against T2T) pre-assembly/classification
