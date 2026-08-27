@@ -1,0 +1,34 @@
+==================================================
+METASIEVE PIPELINE - EXECUTIVE SUMMARY REPORT
+==================================================
+
+[1] KRAKEN2 TAXONOMIC GATE
+Kraken2 Classification Report:
+    - Total Sequences Evaluated: 100
+    - Classified Sequences: 50 (50.00%)
+    - Unclassified Sequences: 50 (50.00%)
+
+--------------------------------------------------
+
+[2] SEQSCREEN FUNCTIONAL GATE
+SeqScreen Functional Characterization Report:
+    - Total Input ORFs Evaluated: 75
+    - Functionally Annotated ORFs: 50 (66.67%)
+    - Unclassified Dark Matter ORFs: 25 (33.33%)
+
+--------------------------------------------------
+
+[3] ESMFOLD STRUCTURAL QUALITY GATE
+ESMFold Quality Filter Summary (pLDDT > 40.0):
+    - Total Structures Evaluated: 25
+    - Passed Filter: 17 (68.00%)
+    - Filtered Out: 8
+
+--------------------------------------------------
+
+[4] MASTER RESULTS SUMMARY
+- Total High-Confidence Novel Candidates: 17
+- Summary Table Saved to: Result_Report\final_table.csv
+- Filtered IDs Saved to: Result_Report\filtered_ids.txt
+
+==================================================

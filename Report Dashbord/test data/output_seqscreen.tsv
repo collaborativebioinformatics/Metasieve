@@ -1,0 +1,76 @@
+seq_id	contig_id	start	end	strand	top_hit_protein	taxonomy	e_value
+read_001	contig_read_001	1	150	+		unclassified	1.0
+read_002	contig_read_002	1	150	+	unclassified	unclassified	1.0
+read_003	contig_read_003	1	150	+		unclassified	1.0
+read_004	contig_read_004	1	150	+	unclassified	unclassified	1.0
+read_005	contig_read_005	1	150	+		unclassified	1.0
+read_006	contig_read_006	1	150	+	unclassified	unclassified	1.0
+read_007	contig_read_007	1	150	+	unclassified	unclassified	1.0
+read_008	contig_read_008	1	150	+	null	unclassified	1.0
+read_009	contig_read_009	1	150	+		unclassified	1.0
+read_010	contig_read_010	1	150	+	unclassified	unclassified	1.0
+read_011	contig_read_011	1	150	+		unclassified	1.0
+read_012	contig_read_012	1	150	+		unclassified	1.0
+read_013	contig_read_013	1	150	+	null	unclassified	1.0
+read_014	contig_read_014	1	150	+	unclassified	unclassified	1.0
+read_015	contig_read_015	1	150	+	null	unclassified	1.0
+read_016	contig_read_016	1	150	+	unclassified	unclassified	1.0
+read_017	contig_read_017	1	150	+	null	unclassified	1.0
+read_018	contig_read_018	1	150	+		unclassified	1.0
+read_019	contig_read_019	1	150	+		unclassified	1.0
+read_020	contig_read_020	1	150	+	null	unclassified	1.0
+read_021	contig_read_021	1	150	+	null	unclassified	1.0
+read_022	contig_read_022	1	150	+	null	unclassified	1.0
+read_023	contig_read_023	1	150	+	unclassified	unclassified	1.0
+read_024	contig_read_024	1	150	+		unclassified	1.0
+read_025	contig_read_025	1	150	+		unclassified	1.0
+read_026	contig_read_026	1	150	+	hypothetical_protein_read_026	Bacteria	1e-10
+read_027	contig_read_027	1	150	+	hypothetical_protein_read_027	Bacteria	1e-10
+read_028	contig_read_028	1	150	+	hypothetical_protein_read_028	Bacteria	1e-10
+read_029	contig_read_029	1	150	+	hypothetical_protein_read_029	Bacteria	1e-10
+read_030	contig_read_030	1	150	+	hypothetical_protein_read_030	Bacteria	1e-10
+read_031	contig_read_031	1	150	+	hypothetical_protein_read_031	Bacteria	1e-10
+read_032	contig_read_032	1	150	+	hypothetical_protein_read_032	Bacteria	1e-10
+read_033	contig_read_033	1	150	+	hypothetical_protein_read_033	Bacteria	1e-10
+read_034	contig_read_034	1	150	+	hypothetical_protein_read_034	Bacteria	1e-10
+read_035	contig_read_035	1	150	+	hypothetical_protein_read_035	Bacteria	1e-10
+read_036	contig_read_036	1	150	+	hypothetical_protein_read_036	Bacteria	1e-10
+read_037	contig_read_037	1	150	+	hypothetical_protein_read_037	Bacteria	1e-10
+read_038	contig_read_038	1	150	+	hypothetical_protein_read_038	Bacteria	1e-10
+read_039	contig_read_039	1	150	+	hypothetical_protein_read_039	Bacteria	1e-10
+read_040	contig_read_040	1	150	+	hypothetical_protein_read_040	Bacteria	1e-10
+read_041	contig_read_041	1	150	+	hypothetical_protein_read_041	Bacteria	1e-10
+read_042	contig_read_042	1	150	+	hypothetical_protein_read_042	Bacteria	1e-10
+read_043	contig_read_043	1	150	+	hypothetical_protein_read_043	Bacteria	1e-10
+read_044	contig_read_044	1	150	+	hypothetical_protein_read_044	Bacteria	1e-10
+read_045	contig_read_045	1	150	+	hypothetical_protein_read_045	Bacteria	1e-10
+read_046	contig_read_046	1	150	+	hypothetical_protein_read_046	Bacteria	1e-10
+read_047	contig_read_047	1	150	+	hypothetical_protein_read_047	Bacteria	1e-10
+read_048	contig_read_048	1	150	+	hypothetical_protein_read_048	Bacteria	1e-10
+read_049	contig_read_049	1	150	+	hypothetical_protein_read_049	Bacteria	1e-10
+read_050	contig_read_050	1	150	+	hypothetical_protein_read_050	Bacteria	1e-10
+read_051	contig_read_051	1	150	+	hypothetical_protein_read_051	Bacteria	1e-10
+read_052	contig_read_052	1	150	+	hypothetical_protein_read_052	Bacteria	1e-10
+read_053	contig_read_053	1	150	+	hypothetical_protein_read_053	Bacteria	1e-10
+read_054	contig_read_054	1	150	+	hypothetical_protein_read_054	Bacteria	1e-10
+read_055	contig_read_055	1	150	+	hypothetical_protein_read_055	Bacteria	1e-10
+read_056	contig_read_056	1	150	+	hypothetical_protein_read_056	Bacteria	1e-10
+read_057	contig_read_057	1	150	+	hypothetical_protein_read_057	Bacteria	1e-10
+read_058	contig_read_058	1	150	+	hypothetical_protein_read_058	Bacteria	1e-10
+read_059	contig_read_059	1	150	+	hypothetical_protein_read_059	Bacteria	1e-10
+read_060	contig_read_060	1	150	+	hypothetical_protein_read_060	Bacteria	1e-10
+read_061	contig_read_061	1	150	+	hypothetical_protein_read_061	Bacteria	1e-10
+read_062	contig_read_062	1	150	+	hypothetical_protein_read_062	Bacteria	1e-10
+read_063	contig_read_063	1	150	+	hypothetical_protein_read_063	Bacteria	1e-10
+read_064	contig_read_064	1	150	+	hypothetical_protein_read_064	Bacteria	1e-10
+read_065	contig_read_065	1	150	+	hypothetical_protein_read_065	Bacteria	1e-10
+read_066	contig_read_066	1	150	+	hypothetical_protein_read_066	Bacteria	1e-10
+read_067	contig_read_067	1	150	+	hypothetical_protein_read_067	Bacteria	1e-10
+read_068	contig_read_068	1	150	+	hypothetical_protein_read_068	Bacteria	1e-10
+read_069	contig_read_069	1	150	+	hypothetical_protein_read_069	Bacteria	1e-10
+read_070	contig_read_070	1	150	+	hypothetical_protein_read_070	Bacteria	1e-10
+read_071	contig_read_071	1	150	+	hypothetical_protein_read_071	Bacteria	1e-10
+read_072	contig_read_072	1	150	+	hypothetical_protein_read_072	Bacteria	1e-10
+read_073	contig_read_073	1	150	+	hypothetical_protein_read_073	Bacteria	1e-10
+read_074	contig_read_074	1	150	+	hypothetical_protein_read_074	Bacteria	1e-10
+read_075	contig_read_075	1	150	+	hypothetical_protein_read_075	Bacteria	1e-10
