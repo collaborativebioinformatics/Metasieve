@@ -1,5 +1,8 @@
 This is a draft code of dashbord of anlysis summary :
+#### Idea 
+<img width="1693" height="929" alt="ChatGPT Image 27 août 2026, 08_52_53" src="https://github.com/user-attachments/assets/8ddae5ce-e953-426f-ab27-7ce6103258e0" />
 
+#### Output
 1. it summarize the stats of all the analysis  
    <img width="1025" height="546" alt="img1" src="https://github.com/user-attachments/assets/847fe7a1-b85c-4905-aacc-144d53d16a6a" />
 
