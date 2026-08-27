@@ -55,5 +55,10 @@ Mohamed Abdelrahim
     --unclassified-out SRR000001_k2unclassified.fa \
     --output SRR000001_scaffolds.k2 
     SRR000001_scaffolds.fasta
- seqscreen --fasta SRR000001_k2unclassified.fa--databases SeqScreenDB_23.4 --working seqscreen_out --threads 16 --mode fast
+ seqscreen \
+    --fasta SRR000001_k2unclassified.fa \
+    --databases SeqScreenDB_23.4 \
+    --working seqscreen_out \
+    --threads 16 \
+    --mode fast
 ```
