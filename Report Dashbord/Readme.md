@@ -16,7 +16,7 @@ This is a draft code of dashbord of anlysis summary :
 
 # to open app
 
-1. download this folder (https://github.com/collaborativebioinformatics/Metasieve/tree/report/Report%20Dashbord)
+1. download this folder
 
 2. download ChimeraX-1.12.exe from https://www.cgl.ucsf.edu/chimerax/download.html
    
