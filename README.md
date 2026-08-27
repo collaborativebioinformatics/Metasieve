@@ -9,7 +9,7 @@ taxonomic, functional, and structural database searches.
 ## Team 
 Dr. Todd Treangen, Rice University\
 Dr. Jennifer Lu, The Johns Hopkins University\
-Hiba Ben Aribi\
+Hiba Ben Aribi, Tunis El Manar University\
 Felix Quintana, Rice University\
 Natalie Kokroko, Rice University\
 Jingyue Wu, Baylor College of Medicine\
