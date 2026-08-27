@@ -1,8 +1,14 @@
-This is a draft of the Metasieve Dashboard
-# Idea 
- <img width="1693" height="929" alt="7" src="https://github.com/user-attachments/assets/2f10a971-c8c4-4f07-951e-89ceb811dc12" />
+# Metasieve Report Dashboard
+## Plan :
+generate an interactive dashboard that will create an interactive report of the “De Novo seq” from metagenomics database analysis using the “MetaSieve” pipeline :
 
-# Output
+1. ui request for input files paths = kraken output file, seqscreen output file; esmfold output folder containing the .pdb files
+2. if not data we have “Demonstration” option that uses data from ALFAFold database classified dark matter + generate simulation outputs for kraken2, seqscreen, esmfold // small dataset of 500 
+3. It generates txt/pdf report  summary of the analysis , displayed in UI + option to download
+4. Extract data of the “Unclassified” seqs form kraken output file, seqscreen output file; esmfold output + combine into a df + download as excel
+5. Option Structural prediction using Chimera for selected seq
+
+# Output - V0 version
 1. Summarize the stats all the analyses  
    <img width="1025" height="546" alt="img1" src="https://github.com/user-attachments/assets/847fe7a1-b85c-4905-aacc-144d53d16a6a" />
 
