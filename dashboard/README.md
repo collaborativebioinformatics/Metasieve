@@ -1,9 +1,13 @@
 # Analysis Summary Dashboard
 
 ## Summary
-This dashboard provides a visual summary of the results from the MetaSieve pipeline.
+MetaSieve comes with a dashboard for visualization of the Kraken2, SeqScreen, and ESMFold results. The dashboard requires output from all three programs:
+1) Kraken2 report file (not output file)
+2) SeqScreen CSV file
+3) ESMFold Protein Structure PDB Files
 
-<img height="300" alt="image" src="https://github.com/user-attachments/assets/4a480177-5308-482c-abf3-4191beaebd75" />
+From these files, the dashboard will provide multiple figures and statistics summarizing the combined information. Using [Chimera](https://www.cgl.ucsf.edu/chimerax/download.html), the dashboard also provides protein structure prediction and visualization. 
+
 
 ## Steps 
 
