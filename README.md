@@ -1,7 +1,7 @@
-# Metasieve
+# MetaSieve
 <img src="images/metasieve_logo.png" width="200">
 
-## Overview of Metasieve
+## Overview of MetaSieve
 
 **MetaSieve** is a hierarchical metagenomic bioprospecting workflow designed to identify potentially novel proteins from short-read sequencing data. 
 The pipeline progressively filters assembled contigs using taxonomic classification, sequence- and function-based characterization, and structural similarity searching to enrich for ORFans and other proteins that remain poorly characterized even at the structural level.
@@ -70,6 +70,8 @@ MetaSieve comes with a dashboard for visualization of the Kraken2, SeqScreen, an
 From these files, the dashboard will provide multiple figures and statistics summarizing the combined information. Using [Chimera](https://www.cgl.ucsf.edu/chimerax/download.html), the dashboard also provides protein structure prediction and visualization. 
 
 For more information, see [Dashboard's README](https://github.com/collaborativebioinformatics/Metasieve/tree/main/dashboard).
+
+[Example MetaSieve Dashboard](https://github.com/user-attachments/assets/de91fa85-2920-467b-98e3-8a4ea7083ec9)
 
 ## Ongoing/Upcoming Projects (Updated 11AM CST 2026/08/28)
 1. Incorporate human genome removal (bowtie2 against T2T) pre-assembly/classification
