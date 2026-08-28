@@ -4,7 +4,7 @@
 ## Overview of MetaSieve
 
 **MetaSieve** is a hierarchical metagenomic bioprospecting workflow designed to identify potentially novel proteins from short-read sequencing data. 
-The pipeline progressively filters assembled contigs using taxonomic classification, sequence- and function-based characterization, and structural similarity searching to enrich for ORFans and other proteins that remain poorly characterized even at the structural level.
+The pipeline progressively filters assembled contigs using taxonomic classification, sequence- and function-based characterization, and structural similarity searching to identify ORFans and other proteins that remain poorly characterized even at the structural level.
 
 ## Team 
 Dr. Todd Treangen, Rice University\
