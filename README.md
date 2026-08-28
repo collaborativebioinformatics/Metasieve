@@ -41,11 +41,12 @@ Mohamed Abdelrahim
  fasterq-dump \
     --temp $TMPDIR \
     --split-files SRR000001
- megahit \
-    -1 SRR000001_1.fastq.gz \
-    -2 SRR000001_2.fastq.gz \
-    -t $THREADS \
-    -o SRR000001_megahit 
+ ggcat \
+    -k 31 \
+    -j $THREADS \
+    -o SRR000001_ggcat \
+    SRR000001_1.fastq.gz \
+    SRR000001_2.fastq.gz \
  kraken2 \
     --db $KRAKEN_DB \
     --threads 16 \
