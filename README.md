@@ -17,14 +17,13 @@ Mohamed Abdelrahim
 
 
 ## Software Requirements
-1. [MEGAHIT](https://github.com/voutcn/megahit)
+1. [GGCAT](https://github.com/algbio/GGCAT)
 2. [Kraken2](https://github.com/DerrickWood/kraken2/)
 3. [Seqscreen](https://gitlab.com/treangenlab/seqscreen)
 4. [ESMFold](https://esmatlas.com/)
 5. [Foldseek](https://github.com/steineggerlab/foldseek)
 
 ## Workflow Overview
-
 
 <img src="images/metasieve.png" width="450">
 
@@ -34,7 +33,7 @@ Mohamed Abdelrahim
 3. [Wastewater Metagenomic dataset 2](https://www.ncbi.nlm.nih.gov/sra/SRX34378760[accn]): 488.7G bases
 4. [Cacao Soil Metagenomics](https://www.ncbi.nlm.nih.gov/sra/SRX34351257[accn]): 25.6G bases
 
-## Command Line
+## Command Lines
 ```
  prefetch \
     SRR000001 \
@@ -61,6 +60,16 @@ Mohamed Abdelrahim
     --working seqscreen_out \
     --threads 16 \
 ```
+
+## Dashboard Summary 
+MetaSieve comes with a dashboard for visualization of the Kraken2, SeqScreen, and ESMFold results. The dashboard requires output from all three programs: 
+1) Kraken2 report file (not output file)
+2) SeqScreen CSV file
+3) ESMFold Protein Structure PDB Files
+
+From these files, the dashboard will provide multiple figures and statistics summarizing the combined information. Using [Chimera](https://www.cgl.ucsf.edu/chimerax/download.html), the dashboard also provides protein structure prediction and visualization. 
+
+For more information, see [Dashboard's README](https://github.com/collaborativebioinformatics/Metasieve/tree/main/dashboard).
 
 ## Ongoing/Upcoming Projects (Updated 11AM CST 2026/08/28)
 1. Incorporate human genome removal (bowtie2 against T2T) pre-assembly/classification
