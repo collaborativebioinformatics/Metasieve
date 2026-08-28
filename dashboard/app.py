@@ -13,7 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 # Default Demo paths
-demo_data_dir = Path("Demo Data")
+demo_data_dir = Path("demo_data")
 DEMO_KRAKEN = demo_data_dir / "samples_kraken2report"
 DEMO_SEQSCREEN = demo_data_dir / "seqscreen_output_sample.csv"
 DEMO_PDB_DIR = demo_data_dir / "samples_pdbs"
