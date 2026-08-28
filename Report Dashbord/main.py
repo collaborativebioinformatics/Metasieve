@@ -1,11 +1,12 @@
-# --- main.py ---
 import os
 from pathlib import Path
 from install_chimerax import ensure_chimerax
 from shiny import run_app
 
 if __name__ == "__main__":
-    print("Step 1: Check ChimeraX environment...")
+
+
+    print("\nCheck ChimeraX environment...")
     chimerax_path = ensure_chimerax()
 
     if chimerax_path:
@@ -17,7 +18,5 @@ if __name__ == "__main__":
             " until installed."
         )
 
-    print("\nStep 2: Starting unified Shiny application...")
-    # Pass the app module string filename directly to run_app
-    # app.py handles pipeline initialization on-demand inside the UI workflow
+    print("\nStarting unified Shiny application...")
     run_app("app.py", port=8000, launch_browser=True)
