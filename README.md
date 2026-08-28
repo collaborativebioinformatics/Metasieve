@@ -1,5 +1,5 @@
 # Metasieve
-<img src="metasieve_logo.png" width="200">
+<img src="images/metasieve_logo.png" width="200">
 
 ## Overview of Metasieve
 
@@ -26,7 +26,7 @@ Mohamed Abdelrahim
 ## Workflow Overview
 
 
-<img src="metasieve.png" width="450">
+<img src="images/metasieve.png" width="450">
 
 ## Required Data
 1. [Kraken2 Database: k2\_pluspf\_20260626.tar.gz](https://benlangmead.github.io/aws-indexes/k2): 
@@ -62,9 +62,7 @@ Mohamed Abdelrahim
     --threads 16 \
 ```
 
-## Ongoing/Upcoming Projects (Updated 9AM CST 2026/08/27)
-1. Run full pipeline (start to finish) on cacao soil test-set
-2. Run full pipeline (start to finish) on Wastewater dataset
-3. Incorporate human genome removal (bowtie2 against T2T) pre-assembly/classification
-4. Compare assembly pre/post Kraken2 classification
-5. Compare megahit vs. metaspades vs. ggcat for assembly 
+## Ongoing/Upcoming Projects (Updated 11AM CST 2026/08/28)
+1. Incorporate human genome removal (bowtie2 against T2T) pre-assembly/classification
+2. Compare assembly pre/post Kraken2 classification
+3. Compare megahit vs. metaspades vs. ggcat for assembly 
