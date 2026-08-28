@@ -1,4 +1,4 @@
-# Analysis Summary Dashbord
+# Analysis Summary Dashboard
 
 ## Summary
 This dashboard provides a visual summary of the results from the MetaSieve pipeline.
@@ -43,7 +43,7 @@ This dashboard provides a visual summary of the results from the MetaSieve pipel
 
 # How-to-Run
 
-1. Download this directory ( https://github.com/collaborativebioinformatics/Metasieve/tree/main/dashbord) 
+1. Download this directory ( https://github.com/collaborativebioinformatics/Metasieve/tree/main/dashboard) 
 
 2. Download ChimeraX-1.12.exe (from https://www.cgl.ucsf.edu/chimerax/download.html) in the same folder folder and set it as cd
    
