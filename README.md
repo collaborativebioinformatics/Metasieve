@@ -7,8 +7,8 @@ environmental DNA and protein sequences that remain unexplained after
 taxonomic, functional, and structural database searches.
 
 The orchestrator is a standalone Python package. External tools
-(metaSPAdes, Kraken2, SeqScreen) are executed on the host through
-`subprocess.run`. Kraken2 writes unclassified contigs with
+(GGCAT, Kraken2, SeqScreen) are executed on the host through
+`subprocess.run`. Kraken2 writes unclassified unitigs with
 `--unclassified-out`; that FASTA is the SeqScreen input. Structure
 prediction uses **Hugging Face ESMFold** (`facebook/esmfold_v1`)
 in-process via `transformers` and PyTorch.
@@ -27,18 +27,20 @@ Jingyue Wu
 
 ![](metasieve_overview.png)
 
-Raw paired-end short reads are assembled and classified with Kraken2.
-Unclassified contigs come from Kraken2 `--unclassified-out` and are
-screened with SeqScreen (fast mode). Translated ORFs are folded with
-Hugging Face ESMFold. Every PDB is named and indexed so it traces back
-to the originating contig and ORF.
+Raw paired-end short reads are assembled into unitigs and classified with
+Kraken2. Unclassified sequences come from Kraken2 `--unclassified-out` and
+are screened with SeqScreen (fast mode). Only queries that SeqScreen did
+not assign a taxid **and** did not hit UniRef/UniProt are six-frame
+translated. Those protein sequences are folded with Hugging Face ESMFold.
+Every PDB is named and indexed so it traces back to the originating unitig
+and ORF.
 
 ```
 paired-end FASTQ
         │
         ▼
-   metaSPAdes          Step 1  assembly
-        │ contigs.fasta
+   GGCAT               Step 1  unitig assembly
+        │ unitigs.fasta
         ▼
      Kraken2           Step 2  taxonomy
         │  --unclassified-out
@@ -47,9 +49,9 @@ paired-end FASTQ
         │
         ▼
     SeqScreen --mode fast   Step 4  functional screening
-        │
+        │  keep queries with no taxid and no UniRef/UniProt hit
         ▼
-   ORF / translation FASTA
+   six-frame ORFs on unexplained unitigs
         │
         ▼
    Hugging Face ESMFold    Step 5  structure prediction
@@ -62,11 +64,11 @@ paired-end FASTQ
 
 | Stage | Tool | Notes |
 | --- | --- | --- |
-| Assembly | metaSPAdes (SPAdes) | Paired-end short reads |
+| Assembly | GGCAT | Paired-end short reads → maximal unitigs (`unitigs.fasta`) |
 | Taxonomy | Kraken2 | `--unclassified-out` FASTA is fed to SeqScreen |
-| Functions | SeqScreen | Fast mode; local `--seqscreen_db` |
+| Functions | SeqScreen | Fast mode; keep queries with no taxid and no UniRef/UniProt hit |
 | Structure | Hugging Face ESMFold | `transformers` + PyTorch; default `facebook/esmfold_v1` |
-| Orchestration | Python ≥ 3.10 | Host binaries on PATH (`metaspades.py`, `kraken2`, `seqscreen`) |
+| Orchestration | Python ≥ 3.10 | Host binaries on PATH (`ggcat`, `kraken2`, `seqscreen`) |
 
 Foldseek is a planned downstream search step against the predicted structures
 and is not run by this pipeline yet.
@@ -152,7 +154,32 @@ Or copy `assets/params.example.yml` and run:
 python main.py --config params.yml
 ```
 
-metaSPAdes, Kraken2, and SeqScreen must be on `PATH`. ESMFold runs in
+To skip earlier steps, pass the intermediate FASTA you already have:
+
+```bash
+# Start at SeqScreen (Kraken2 unclassified contigs)
+python main.py \
+    --unclassified sample.unclassified.fasta \
+    --seqscreen_db /data/dbs/seqscreen_databases \
+    --sample_id sample \
+    --outdir results
+
+# Start at Kraken2 (assembled unitigs)
+python main.py \
+    --unitigs sample.unitigs.fasta \
+    --kraken_db /data/dbs/kraken2 \
+    --seqscreen_db /data/dbs/seqscreen_databases \
+    --outdir results
+
+# Start at ESMFold (ORF proteins)
+python main.py --orfs sample.orfs.faa --sample_id sample --outdir results
+```
+
+`--start_from` can force the entry point (`assembly`, `classification`,
+`unclassified`, `folding`); by default it is inferred from the input flags.
+
+GGCAT, Kraken2, and SeqScreen must be on `PATH` for the steps you run.
+If you start from `--unclassified`, only SeqScreen is required. ESMFold runs in
 the Python process on CUDA when available.
 
 ## Parameters
@@ -161,6 +188,11 @@ the Python process on CUDA when available.
 | --- | --- |
 | `--reads` | Paired-end glob, e.g. `data/*_{1,2}.fastq.gz` |
 | `--r1` / `--r2` | Explicit mates for a single sample |
+| `--unitigs` | Assembled unitigs FASTA; skip GGCAT |
+| `--unclassified` | Kraken2 unclassified FASTA; skip GGCAT and Kraken2 |
+| `--orfs` | ORF protein FASTA or split directory; skip to ESMFold |
+| `--start_from` | `auto` (default), `assembly`, `classification`, `unclassified`, `folding` |
+| `--sample_id` | Sample name (useful with a single restart FASTA) |
 | `--outdir` | Results directory |
 | `--kraken_db` | Kraken2 database directory |
 | `--seqscreen_db` | SeqScreen databases directory |
@@ -169,14 +201,21 @@ the Python process on CUDA when available.
 | `--esmfold_device` | `auto`, `cuda`, or `cpu` |
 | `--esmfold_num_recycles` | ESMFold recycle iterations (default: 4) |
 | `--esmfold_chunk_size` | Trunk chunk size to limit GPU memory (default: 128) |
-| `--threads` | CPU threads for assembly / Kraken2 / SeqScreen |
-| `--memory_gb` | metaSPAdes `-m` (GB) |
-| `--min_contig_len`, `--min_orf_aa`, `--max_orf_aa` | Length filters |
+| `--threads` | CPU threads for GGCAT / Kraken2 / SeqScreen |
+| `--memory_gb` | GGCAT memory cap in GB (passed to `ggcat build -m`) |
+| `--ggcat_kmer` | GGCAT k-mer length (default: 31) |
+| `--ggcat_min_multiplicity` | GGCAT minimum k-mer multiplicity `-s` (default: 2) |
+| `--min_contig_len`, `--min_orf_aa`, `--max_orf_aa` | Length filters (unitigs after GGCAT, then unclassified FASTA) |
 | `--require_orf_start` / `--no_require_orf_start` | Start-codon filter (default: require) |
 | `--skip_esmfold` | Stop after ORF extraction |
 
 Kraken2 `--unclassified-out` is the SeqScreen input. `--min_contig_len`
-can drop short unclassified contigs before screening.
+can drop short unclassified unitigs before screening. After SeqScreen,
+only queries with no taxid **and** no UniRef/UniProt protein hit are
+six-frame translated for folding. After that step, `{sample}.contig_report.csv`
+lists every screened contig and `{sample}.seqscreen_step_report.txt` lists
+kept contigs plus found ORFs (protein sequences are also in
+`{sample}.orf_manifest.csv` and `{sample}.orfs.faa`).
 
 ## Outputs
 
@@ -185,7 +224,11 @@ results/
 ├── 01_assembly/<sample>/
 ├── 02_classification/<sample>/          # kraken2.out, report, unclassified FASTA
 ├── 03_filtering/<sample>/               # length-filtered unclassified FASTA
-├── 04_seqscreen/<sample>/               # SeqScreen working dir, ORFs, orf_manifest.csv
+├── 04_seqscreen/<sample>/               # SeqScreen, unexplained FASTA, ORFs
+│   ├── <sample>.contig_report.csv       # every screened contig (kept vs skipped)
+│   ├── <sample>.orf_manifest.csv        # found ORFs (coords + protein sequence)
+│   ├── <sample>.seqscreen_step_report.txt
+│   └── orfs_split/<contig_id>/          # one directory per contig for split ORFs
 ├── 05_structures/
 │   ├── esmfold/<sample>/
 │   ├── tracked_structures/              # stamped PDB with contig metadata

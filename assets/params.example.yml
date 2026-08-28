@@ -4,6 +4,12 @@
 reads: 'data/*_{1,2}.fastq.gz'
 outdir: results
 
+# Restart from an intermediate FASTA instead of raw reads:
+# unitigs: sample.unitigs.fasta
+# unclassified: sample.unclassified.fasta
+# orfs: sample.orfs.faa
+# start_from: auto
+
 kraken_db: /data/dbs/kraken2
 seqscreen_db: /data/dbs/seqscreen_databases
 
@@ -24,4 +30,6 @@ skip_esmfold: false
 
 threads: 16
 memory_gb: 64
+ggcat_kmer: 31
+ggcat_min_multiplicity: 2
 kraken2_confidence: 0.01

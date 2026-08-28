@@ -2,6 +2,7 @@
 
 These functions replace the Nextflow ``bin/*.py`` helpers. FASTA read/write uses
 Biopython; ORF translation uses NCBI table 11 (bacterial / plastid).
+ORF calling is restricted to SeqScreen queries with no taxid and no UniRef hit.
 """
 
 from __future__ import annotations
@@ -36,6 +37,38 @@ PROTEIN_NAME_HINTS = (
     ".faa",
 )
 STRUCTURE_SUFFIXES = {".pdb", ".cif", ".mmcif", ".ent"}
+SEQSCREEN_MISSING = {
+    "",
+    "-",
+    ".",
+    "*",
+    "na",
+    "n/a",
+    "none",
+    "null",
+    "nan",
+    "unclassified",
+    "unassigned",
+    "unknown",
+    "not found",
+    "notfound",
+}
+SEQSCREEN_UNIREF_COLUMNS = (
+    "uniref",
+    "uniref100",
+    "uniref90",
+    "uniref50",
+    "uniprot",
+    "uniprot_id",
+    "uniprot accession",
+    "uniprot_accession",
+)
+SEQSCREEN_UNIREF_EVALUE_COLUMNS = (
+    "uniprot evalue",
+    "uniprot_evalue",
+    "uniref evalue",
+    "uniref_evalue",
+)
 
 
 @dataclass
@@ -62,6 +95,10 @@ class OrfResult:
     stats: Path
     n_orfs: int
     split_fastas: list[Path] = field(default_factory=list)
+    unexplained_fasta: Path | None = None
+    n_unexplained_contigs: int = 0
+    contig_report: Path | None = None
+    step_report: Path | None = None
 
 
 def read_fasta(path: Path) -> Iterator[FastaRecord]:
@@ -508,6 +545,74 @@ def load_seqscreen_tsv(path: Path) -> dict[str, dict[str, Any]]:
     return by_query
 
 
+def _seqscreen_cell(ann: Optional[dict[str, Any]], *names: str) -> str:
+    if not ann:
+        return ""
+    lower = {str(key).lower(): key for key in ann if key and not str(key).startswith("_")}
+    for name in names:
+        key = lower.get(name.lower())
+        if key is not None:
+            value = ann.get(key)
+            if value is None:
+                continue
+            return str(value).strip()
+    return ""
+
+
+def _seqscreen_value_missing(value: str) -> bool:
+    text = value.strip()
+    if not text:
+        return True
+    return text.lower() in SEQSCREEN_MISSING
+
+
+def seqscreen_has_taxid(ann: Optional[dict[str, Any]]) -> bool:
+    """True when SeqScreen assigned an NCBI taxid (or multi-tax hit)."""
+    primary = _seqscreen_cell(ann, "taxid", "tax_id", "ncbi_taxid")
+    if primary and not _seqscreen_value_missing(primary) and primary != "0":
+        return True
+    for column in ("centrifuge_multi_tax", "diamond_multi_tax", "multi_taxids_confidence"):
+        value = _seqscreen_cell(ann, column)
+        if value and not _seqscreen_value_missing(value) and value != "0":
+            return True
+    return False
+
+
+def seqscreen_has_uniref_hit(ann: Optional[dict[str, Any]]) -> bool:
+    """True when SeqScreen reported a UniRef / UniProt protein hit."""
+    for column in SEQSCREEN_UNIREF_COLUMNS:
+        value = _seqscreen_cell(ann, column)
+        if value and not _seqscreen_value_missing(value):
+            return True
+    for column in SEQSCREEN_UNIREF_EVALUE_COLUMNS:
+        value = _seqscreen_cell(ann, column)
+        if value and not _seqscreen_value_missing(value):
+            return True
+    return False
+
+
+def seqscreen_is_unexplained(ann: Optional[dict[str, Any]]) -> bool:
+    """Keep sequences SeqScreen did not assign a taxid and did not hit UniRef.
+
+    Rows missing from the report are treated as unexplained.
+    """
+    if not ann:
+        return True
+    return (not seqscreen_has_taxid(ann)) and (not seqscreen_has_uniref_hit(ann))
+
+
+def seqscreen_skip_reason(ann: Optional[dict[str, Any]]) -> str:
+    """Why a unitig was excluded from ORF calling, or empty if kept."""
+    if seqscreen_is_unexplained(ann):
+        return ""
+    parts: list[str] = []
+    if seqscreen_has_taxid(ann):
+        parts.append("taxid")
+    if seqscreen_has_uniref_hit(ann):
+        parts.append("uniref")
+    return "+".join(parts) or "explained"
+
+
 def annotation_blob(ann: Optional[dict[str, Any]]) -> str:
     if not ann:
         return ""
@@ -640,16 +745,21 @@ def extract_seqscreen_orfs(
     output_manifest: Path,
     output_split_dir: Path,
     output_stats: Path,
+    output_unexplained_fasta: Path | None = None,
+    output_contig_report: Path | None = None,
+    output_step_report: Path | None = None,
     min_aa: int = 50,
     max_aa: int = 1024,
     require_start: bool = True,
     genetic_code: int = 11,
 ) -> OrfResult:
-    """Call ORFs on unclassified contigs and merge SeqScreen annotations.
+    """Six-frame ORFs from SeqScreen-unexplained unitigs only.
 
-    Prefers SeqScreen-derived protein records when they match a contig ID,
-    otherwise six-frame translates the nucleotide FASTA. FASTA record IDs are
-    filesystem-safe: ``{sample}__{contig}__ORF_0001``.
+    A unitig is unexplained when ``seqscreen_report.tsv`` has no taxid and no
+    UniRef / UniProt protein hit (``-`` / empty / taxid ``0``). Queries missing
+    from the report are kept. Writes a contig report, ORF manifest (with protein
+    sequences), and a step-4 summary listing kept contigs and found ORFs.
+    FASTA record IDs are filesystem-safe: ``{sample}__{contig}__ORF_0001``.
     """
     unclassified_fasta = Path(unclassified_fasta)
     seqscreen_dir = Path(seqscreen_dir)
@@ -663,19 +773,43 @@ def extract_seqscreen_orfs(
         seqscreen_ann = load_seqscreen_tsv(report_path)
         LOGGER.info("Indexed %d SeqScreen query keys", len(seqscreen_ann))
     else:
-        LOGGER.warning("No seqscreen_report.tsv under %s", seqscreen_dir)
-
-    protein_fastas = discover_protein_fastas(seqscreen_dir)
-    LOGGER.info("SeqScreen protein FASTA candidates: %d", len(protein_fastas))
-    seqscreen_proteins = index_seqscreen_protein_fastas(protein_fastas)
+        LOGGER.warning(
+            "No seqscreen_report.tsv under %s; treating all unitigs as unexplained",
+            seqscreen_dir,
+        )
 
     output_split_dir = Path(output_split_dir)
     output_fasta = Path(output_fasta)
     output_manifest = Path(output_manifest)
     output_stats = Path(output_stats)
+    if output_unexplained_fasta is None:
+        output_unexplained_fasta = output_fasta.with_name(
+            output_fasta.name.replace(".orfs.faa", ".unexplained.fasta")
+        )
+        if output_unexplained_fasta == output_fasta:
+            output_unexplained_fasta = output_fasta.with_suffix(".unexplained.fasta")
+    output_unexplained_fasta = Path(output_unexplained_fasta)
+    if output_contig_report is None:
+        output_contig_report = output_fasta.with_name(
+            output_fasta.name.replace(".orfs.faa", ".contig_report.csv")
+        )
+        if output_contig_report == output_fasta:
+            output_contig_report = output_fasta.with_suffix(".contig_report.csv")
+    output_contig_report = Path(output_contig_report)
+    if output_step_report is None:
+        output_step_report = output_fasta.with_name(
+            output_fasta.name.replace(".orfs.faa", ".seqscreen_step_report.txt")
+        )
+        if output_step_report == output_fasta:
+            output_step_report = output_fasta.with_suffix(".seqscreen_step_report.txt")
+    output_step_report = Path(output_step_report)
     output_split_dir.mkdir(parents=True, exist_ok=True)
     output_fasta.parent.mkdir(parents=True, exist_ok=True)
     output_manifest.parent.mkdir(parents=True, exist_ok=True)
+    output_unexplained_fasta.parent.mkdir(parents=True, exist_ok=True)
+    output_contig_report.parent.mkdir(parents=True, exist_ok=True)
+    output_step_report.parent.mkdir(parents=True, exist_ok=True)
+    output_stats.parent.mkdir(parents=True, exist_ok=True)
 
     fieldnames = [
         "sample_id",
@@ -691,20 +825,28 @@ def extract_seqscreen_orfs(
         "frame",
         "aa_length",
         "aa_sha256_12",
+        "aa_seq",
         "seqscreen_query",
+        "seqscreen_taxid",
+        "seqscreen_uniref",
         "seqscreen_annotation",
         "orig_nt_header",
     ]
 
     n_contigs = 0
+    n_unexplained = 0
+    n_explained = 0
     n_orfs = 0
-    n_from_seqscreen = 0
     n_from_sixframe = 0
     split_fastas: list[Path] = []
+    contig_rows: list[dict[str, Any]] = []
+    orf_rows: list[dict[str, Any]] = []
 
-    with output_fasta.open("w", encoding="utf-8") as fasta_out, output_manifest.open(
-        "w", encoding="utf-8", newline=""
-    ) as csv_out:
+    with (
+        output_fasta.open("w", encoding="utf-8") as fasta_out,
+        output_unexplained_fasta.open("w", encoding="utf-8") as unexplained_out,
+        output_manifest.open("w", encoding="utf-8", newline="") as csv_out,
+    ):
         writer = csv.DictWriter(csv_out, fieldnames=fieldnames)
         writer.writeheader()
 
@@ -712,44 +854,60 @@ def extract_seqscreen_orfs(
             n_contigs += 1
             contig_id = contig_id_from_header(rec.header)
             ann = lookup_annotation(seqscreen_ann, rec.record_id, contig_id)
-            orfs = pick_orfs_for_contig(
-                contig_id,
-                rec.record_id,
-                rec.sequence,
-                seqscreen_ann,
-                seqscreen_proteins,
-                min_aa,
-                max_aa,
-                require_start,
-                table=genetic_code,
-            )
-            safe_contig = sanitize_id(contig_id)
-            for idx, orf in enumerate(orfs, start=1):
-                orf_id = f"ORF_{idx:04d}"
-                record_id = f"{sanitize_id(sample_id)}__{safe_contig}__{orf_id}"
-                fasta_header = (
-                    f"{record_id} sample={sample_id} contig_id={contig_id} "
-                    f"orf_id={orf_id} start={orf.get('nt_start', '')} "
-                    f"end={orf.get('nt_end', '')} strand={orf.get('strand', '')} "
-                    f"frame={orf.get('frame', '')} aa_len={orf['aa_length']} "
-                    f"source={orf['source']}"
+            taxid = _seqscreen_cell(ann, "taxid", "tax_id")
+            uniref = _seqscreen_cell(ann, *SEQSCREEN_UNIREF_COLUMNS)
+            kept = seqscreen_is_unexplained(ann)
+            orf_ids: list[str] = []
+            n_orfs_contig = 0
+
+            if not kept:
+                n_explained += 1
+                LOGGER.debug(
+                    "Skipping SeqScreen-explained unitig %s taxid=%s uniref=%s",
+                    contig_id,
+                    taxid,
+                    uniref,
                 )
-                write_fasta_record(fasta_out, fasta_header, orf["aa_seq"])
+            else:
+                n_unexplained += 1
+                write_fasta_record(unexplained_out, rec.header, rec.sequence)
+                orfs = find_orfs_six_frame(
+                    rec.sequence,
+                    min_aa,
+                    max_aa,
+                    require_start,
+                    table=genetic_code,
+                )
+                safe_contig = sanitize_id(contig_id)
+                contig_split_dir = output_split_dir / safe_contig
+                if orfs:
+                    contig_split_dir.mkdir(parents=True, exist_ok=True)
+                for idx, orf in enumerate(orfs, start=1):
+                    orf_id = f"ORF_{idx:04d}"
+                    record_id = f"{sanitize_id(sample_id)}__{safe_contig}__{orf_id}"
+                    fasta_header = (
+                        f"{record_id} sample={sample_id} contig_id={contig_id} "
+                        f"orf_id={orf_id} start={orf.get('nt_start', '')} "
+                        f"end={orf.get('nt_end', '')} strand={orf.get('strand', '')} "
+                        f"frame={orf.get('frame', '')} aa_len={orf['aa_length']} "
+                        f"source={orf['source']}"
+                    )
+                    write_fasta_record(fasta_out, fasta_header, orf["aa_seq"])
 
-                split_name = f"{record_id}.faa"
-                split_path = output_split_dir / split_name
-                with split_path.open("w", encoding="utf-8") as split_handle:
-                    write_fasta_record(split_handle, fasta_header, orf["aa_seq"])
-                split_fastas.append(split_path)
+                    split_name = f"{record_id}.faa"
+                    split_rel = f"{safe_contig}/{split_name}"
+                    split_path = contig_split_dir / split_name
+                    with split_path.open("w", encoding="utf-8") as split_handle:
+                        write_fasta_record(split_handle, fasta_header, orf["aa_seq"])
+                    split_fastas.append(split_path)
 
-                writer.writerow(
-                    {
+                    row = {
                         "sample_id": sample_id,
                         "contig_id": contig_id,
                         "orf_id": orf_id,
                         "record_id": record_id,
                         "fasta_header": fasta_header,
-                        "split_fasta": split_name,
+                        "split_fasta": split_rel,
                         "source": orf["source"],
                         "nt_start": orf.get("nt_start", ""),
                         "nt_end": orf.get("nt_end", ""),
@@ -757,35 +915,101 @@ def extract_seqscreen_orfs(
                         "frame": orf.get("frame", ""),
                         "aa_length": orf["aa_length"],
                         "aa_sha256_12": sha256_short(orf["aa_seq"]),
+                        "aa_seq": orf["aa_seq"],
                         "seqscreen_query": (ann or {}).get("_query_id", ""),
+                        "seqscreen_taxid": taxid,
+                        "seqscreen_uniref": uniref,
                         "seqscreen_annotation": annotation_blob(ann),
                         "orig_nt_header": rec.header,
                     }
-                )
-                n_orfs += 1
-                if str(orf["source"]).startswith("seqscreen"):
-                    n_from_seqscreen += 1
-                else:
+                    writer.writerow(row)
+                    orf_rows.append(row)
+                    orf_ids.append(record_id)
+                    n_orfs_contig += 1
+                    n_orfs += 1
                     n_from_sixframe += 1
+
+            contig_rows.append(
+                {
+                    "sample_id": sample_id,
+                    "contig_id": contig_id,
+                    "nt_length": len(rec.sequence),
+                    "unexplained": "yes" if kept else "no",
+                    "skip_reason": seqscreen_skip_reason(ann),
+                    "seqscreen_query": (ann or {}).get("_query_id", ""),
+                    "seqscreen_taxid": taxid,
+                    "seqscreen_uniref": uniref,
+                    "n_orfs": n_orfs_contig,
+                    "orf_ids": ";".join(orf_ids),
+                    "orig_nt_header": rec.header,
+                }
+            )
+
+    contig_fields = [
+        "sample_id",
+        "contig_id",
+        "nt_length",
+        "unexplained",
+        "skip_reason",
+        "seqscreen_query",
+        "seqscreen_taxid",
+        "seqscreen_uniref",
+        "n_orfs",
+        "orf_ids",
+        "orig_nt_header",
+    ]
+    with output_contig_report.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=contig_fields)
+        writer.writeheader()
+        writer.writerows(contig_rows)
+
+    write_seqscreen_step_report(
+        path=output_step_report,
+        sample_id=sample_id,
+        report_path=report_path,
+        min_aa=min_aa,
+        max_aa=max_aa,
+        contig_rows=contig_rows,
+        orf_rows=orf_rows,
+        orf_fasta=output_fasta,
+        unexplained_fasta=output_unexplained_fasta,
+        contig_report=output_contig_report,
+        orf_manifest=output_manifest,
+    )
 
     stats = {
         "sample_id": sample_id,
         "contigs": n_contigs,
+        "contigs_unexplained": n_unexplained,
+        "contigs_explained_skipped": n_explained,
         "orfs_written": n_orfs,
-        "orfs_from_seqscreen": n_from_seqscreen,
+        "orfs_from_seqscreen": 0,
         "orfs_from_six_frame": n_from_sixframe,
         "seqscreen_report": str(report_path) if report_path else "",
-        "seqscreen_protein_fastas": [str(p) for p in protein_fastas],
+        "unexplained_fasta": str(output_unexplained_fasta),
+        "contig_report": str(output_contig_report),
+        "step_report": str(output_step_report),
         "min_aa": min_aa,
         "max_aa": max_aa,
+        "filter": "no_taxid_and_no_uniref_hit",
     }
     with output_stats.open("w", encoding="utf-8") as handle:
         json.dump(stats, handle, indent=2)
         handle.write("\n")
 
-    LOGGER.info("Wrote %d ORFs from %d contigs -> %s", n_orfs, n_contigs, output_fasta)
-    if n_orfs == 0:
-        LOGGER.warning("No ORFs passed length filters.")
+    LOGGER.info(
+        "Wrote %d ORFs from %d unexplained / %d input unitigs -> %s",
+        n_orfs,
+        n_unexplained,
+        n_contigs,
+        output_fasta,
+    )
+    LOGGER.info("Step 4 contig report: %s", output_contig_report)
+    LOGGER.info("Step 4 ORF/contig summary: %s", output_step_report)
+    if n_unexplained == 0:
+        LOGGER.warning("No SeqScreen-unexplained unitigs (no taxid and no UniRef hit).")
+    elif n_orfs == 0:
+        LOGGER.warning("No ORFs passed length filters on unexplained unitigs.")
 
     return OrfResult(
         fasta=output_fasta,
@@ -794,7 +1018,197 @@ def extract_seqscreen_orfs(
         stats=output_stats,
         n_orfs=n_orfs,
         split_fastas=sorted(split_fastas),
+        unexplained_fasta=output_unexplained_fasta,
+        n_unexplained_contigs=n_unexplained,
+        contig_report=output_contig_report,
+        step_report=output_step_report,
     )
+
+
+def write_seqscreen_step_report(
+    *,
+    path: Path,
+    sample_id: str,
+    report_path: Path | None,
+    min_aa: int,
+    max_aa: int,
+    contig_rows: list[dict[str, Any]],
+    orf_rows: list[dict[str, Any]],
+    orf_fasta: Path,
+    unexplained_fasta: Path,
+    contig_report: Path,
+    orf_manifest: Path,
+) -> Path:
+    """Write a human-readable step-4 summary of kept contigs and found ORFs."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    kept = [row for row in contig_rows if row.get("unexplained") == "yes"]
+    skipped = [row for row in contig_rows if row.get("unexplained") != "yes"]
+    lines = [
+        "Metasieve step 4 — SeqScreen unexplained contig / ORF report",
+        f"sample_id\t{sample_id}",
+        f"seqscreen_report\t{report_path if report_path else ''}",
+        "filter\tno taxid and no UniRef/UniProt hit",
+        f"orf_aa_length\t{min_aa}-{max_aa}",
+        f"input_contigs\t{len(contig_rows)}",
+        f"explained_skipped\t{len(skipped)}",
+        f"unexplained_kept\t{len(kept)}",
+        f"orfs_found\t{len(orf_rows)}",
+        f"contig_report\t{contig_report}",
+        f"orf_manifest\t{orf_manifest}",
+        f"unexplained_fasta\t{unexplained_fasta}",
+        f"orf_fasta\t{orf_fasta}",
+        "",
+        "## Kept contigs",
+        "contig_id\tnt_length\tn_orfs\torf_ids",
+    ]
+    if kept:
+        for row in kept:
+            lines.append(
+                f"{row['contig_id']}\t{row['nt_length']}\t{row['n_orfs']}\t{row['orf_ids']}"
+            )
+    else:
+        lines.append("(none)")
+
+    lines.extend(
+        [
+            "",
+            "## Found ORFs",
+            "record_id\tcontig_id\torf_id\tnt_start\tnt_end\tstrand\tframe\taa_length\taa_seq",
+        ]
+    )
+    if orf_rows:
+        for row in orf_rows:
+            lines.append(
+                "\t".join(
+                    [
+                        str(row.get("record_id", "")),
+                        str(row.get("contig_id", "")),
+                        str(row.get("orf_id", "")),
+                        str(row.get("nt_start", "")),
+                        str(row.get("nt_end", "")),
+                        str(row.get("strand", "")),
+                        str(row.get("frame", "")),
+                        str(row.get("aa_length", "")),
+                        str(row.get("aa_seq", "")),
+                    ]
+                )
+            )
+    else:
+        lines.append("(none)")
+
+    lines.extend(
+        [
+            "",
+            "## Skipped contigs (SeqScreen taxid or UniRef hit)",
+            "contig_id\tnt_length\tskip_reason\tseqscreen_taxid\tseqscreen_uniref",
+        ]
+    )
+    if skipped:
+        for row in skipped:
+            lines.append(
+                f"{row['contig_id']}\t{row['nt_length']}\t{row['skip_reason']}\t"
+                f"{row['seqscreen_taxid']}\t{row['seqscreen_uniref']}"
+            )
+    else:
+        lines.append("(none)")
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def prepare_orf_fastas(source: Path, split_dir: Path) -> list[Path]:
+    """Return per-ORF FASTA paths, splitting a multi-record file if needed."""
+    source = Path(source)
+    split_dir = Path(split_dir)
+    if source.is_dir():
+        files = sorted(
+            path
+            for path in source.rglob("*")
+            if path.is_file() and path.suffix.lower() in AA_FASTA_SUFFIXES
+        )
+        if not files:
+            raise FileNotFoundError(f"No protein FASTA files under {source}")
+        return files
+
+    if not source.is_file():
+        raise FileNotFoundError(f"ORF FASTA not found: {source}")
+
+    records = list(read_fasta(source))
+    if not records:
+        raise FileNotFoundError(f"ORF FASTA is empty: {source}")
+    if len(records) == 1:
+        return [source]
+
+    split_dir.mkdir(parents=True, exist_ok=True)
+    paths: list[Path] = []
+    for rec in records:
+        record_id = sanitize_id(rec.record_id)
+        contig = sanitize_id(contig_id_from_header(rec.header))
+        dest = split_dir / contig / f"{record_id}.faa"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with dest.open("w", encoding="utf-8") as handle:
+            write_fasta_record(handle, rec.header, rec.sequence)
+        paths.append(dest)
+    LOGGER.info("Split %d ORF records from %s -> %s", len(paths), source, split_dir)
+    return paths
+
+
+def write_orf_manifest_from_fastas(
+    *,
+    sample_id: str,
+    split_fastas: Sequence[Path],
+    output_manifest: Path,
+) -> Path:
+    """Build a minimal ORF manifest from per-ORF FASTA headers."""
+    fieldnames = [
+        "sample_id",
+        "contig_id",
+        "orf_id",
+        "record_id",
+        "fasta_header",
+        "split_fasta",
+        "source",
+        "nt_start",
+        "nt_end",
+        "strand",
+        "frame",
+        "aa_length",
+        "aa_sha256_12",
+        "aa_seq",
+        "orig_nt_header",
+    ]
+    output_manifest = Path(output_manifest)
+    output_manifest.parent.mkdir(parents=True, exist_ok=True)
+    with output_manifest.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for path in split_fastas:
+            recs = list(read_fasta(path))
+            if not recs:
+                continue
+            rec = recs[0]
+            meta = parse_fasta_header_fields(path)
+            writer.writerow(
+                {
+                    "sample_id": sample_id,
+                    "contig_id": meta.get("contig_id", contig_id_from_header(rec.header)),
+                    "orf_id": meta.get("orf_id", ""),
+                    "record_id": rec.record_id,
+                    "fasta_header": rec.header,
+                    "split_fasta": str(path),
+                    "source": meta.get("source", "input"),
+                    "nt_start": meta.get("start", meta.get("nt_start", "")),
+                    "nt_end": meta.get("end", meta.get("nt_end", "")),
+                    "strand": meta.get("strand", ""),
+                    "frame": meta.get("frame", ""),
+                    "aa_length": len(rec.sequence),
+                    "aa_sha256_12": sha256_short(rec.sequence),
+                    "aa_seq": rec.sequence,
+                    "orig_nt_header": rec.header,
+                }
+            )
+    return output_manifest
 
 
 # ---------------------------------------------------------------------------

@@ -35,6 +35,10 @@ class PipelineConfig:
     esmfold_num_recycles: int = 4
     esmfold_chunk_size: int = 128
     skip_esmfold: bool = False
+    unitigs: str | None = None
+    unclassified: str | None = None
+    orfs: str | None = None
+    start_from: str = "auto"
 
     seqscreen_mode: str = "fast"
     seqscreen_extra_args: str = ""
@@ -44,6 +48,8 @@ class PipelineConfig:
     max_orf_aa: int = 1024
     require_orf_start: bool = True
     genetic_code: int = 11
+    ggcat_kmer: int = 31
+    ggcat_min_multiplicity: int = 2
 
     threads: int = 16
     memory_gb: int = 64
@@ -56,15 +62,56 @@ class PipelineConfig:
         return self.outdir.expanduser().resolve()
 
     def validate(self) -> None:
+        from metasieve.samples import (
+            START_ASSEMBLY,
+            START_CLASSIFICATION,
+            START_FOLDING,
+            START_UNCLASSIFIED,
+            infer_start_from,
+        )
+
+        self.start_from = infer_start_from(
+            start_from=self.start_from,
+            reads=self.reads,
+            r1=self.r1,
+            r2=self.r2,
+            unitigs=self.unitigs,
+            unclassified=self.unclassified,
+            orfs=self.orfs,
+        )
+
         missing: list[str] = []
-        if not self.reads and not (self.r1 and self.r2):
-            missing.append("--reads (or --r1 and --r2)")
-        if self.kraken_db is None:
-            missing.append("--kraken_db")
-        if self.seqscreen_db is None:
-            missing.append("--seqscreen_db")
+        if self.start_from == START_ASSEMBLY:
+            if not self.reads and not (self.r1 and self.r2):
+                missing.append("--reads (or --r1 and --r2)")
+            if self.kraken_db is None:
+                missing.append("--kraken_db")
+            if self.seqscreen_db is None:
+                missing.append("--seqscreen_db")
+        elif self.start_from == START_CLASSIFICATION:
+            if not self.unitigs:
+                missing.append("--unitigs")
+            if self.kraken_db is None:
+                missing.append("--kraken_db")
+            if self.seqscreen_db is None:
+                missing.append("--seqscreen_db")
+        elif self.start_from == START_UNCLASSIFIED:
+            if not self.unclassified:
+                missing.append("--unclassified")
+            if self.seqscreen_db is None:
+                missing.append("--seqscreen_db")
+        elif self.start_from == START_FOLDING:
+            if not self.orfs:
+                missing.append("--orfs")
         if missing:
             raise PipelineError("Missing required parameters: " + ", ".join(missing))
+
+        if self.start_from == START_UNCLASSIFIED and (self.reads or self.unitigs):
+            LOGGER.info("Starting from --unclassified; skipping GGCAT and Kraken2")
+        elif self.start_from == START_CLASSIFICATION and self.reads:
+            LOGGER.info("Starting from --unitigs; skipping GGCAT")
+        elif self.start_from == START_FOLDING:
+            LOGGER.info("Starting from --orfs; skipping assembly, Kraken2, and SeqScreen")
 
         device = (self.esmfold_device or "auto").lower().strip()
         if device not in {"auto", "cuda", "cpu"}:
@@ -73,8 +120,17 @@ class PipelineConfig:
             )
         self.esmfold_device = device
 
-        _require_dir(self.kraken_db, "--kraken_db")
-        _require_dir(self.seqscreen_db, "--seqscreen_db")
+        if int(self.ggcat_kmer) < 1:
+            raise PipelineError("--ggcat_kmer must be a positive integer")
+        if int(self.ggcat_min_multiplicity) < 1:
+            raise PipelineError("--ggcat_min_multiplicity must be a positive integer")
+        self.ggcat_kmer = int(self.ggcat_kmer)
+        self.ggcat_min_multiplicity = int(self.ggcat_min_multiplicity)
+
+        if self.start_from in {START_ASSEMBLY, START_CLASSIFICATION}:
+            _require_dir(self.kraken_db, "--kraken_db")
+        if self.start_from != START_FOLDING:
+            _require_dir(self.seqscreen_db, "--seqscreen_db")
         if self.esmfold_cache is not None:
             self.esmfold_cache = self.esmfold_cache.expanduser()
             self.esmfold_cache.mkdir(parents=True, exist_ok=True)

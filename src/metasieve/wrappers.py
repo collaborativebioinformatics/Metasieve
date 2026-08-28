@@ -1,7 +1,8 @@
 """CLI wrappers: ``subprocess.run`` around assembly, taxonomy, and SeqScreen.
 
 Tools are executed directly on the host (no Docker / Singularity).
-ESMFold runs in-process via Hugging Face (:mod:`metasieve.folding`).
+Assembly uses GGCAT unitigs. ESMFold runs in-process via Hugging Face
+(:mod:`metasieve.folding`).
 """
 
 from __future__ import annotations
@@ -141,9 +142,9 @@ class ToolRunner:
             log_prefix=log_prefix,
         )
 
-    # ── Step 1: metaSPAdes ────────────────────────────────────────────────
+    # ── Step 1: GGCAT unitigs ─────────────────────────────────────────────
 
-    def metaspades(
+    def ggcat(
         self,
         *,
         r1: Path,
@@ -151,41 +152,66 @@ class ToolRunner:
         outdir: Path,
         threads: int,
         memory_gb: int,
+        kmer: int = 31,
+        min_multiplicity: int = 2,
+        min_unitig_len: int = 200,
+        force: bool = False,
     ) -> Path:
+        """Build maximal unitigs from paired-end reads with GGCAT."""
+        from metasieve.parsers import filter_fasta_min_length
+
         r1 = r1.resolve()
         r2 = r2.resolve()
         outdir = outdir.resolve()
         outdir.mkdir(parents=True, exist_ok=True)
-        work = outdir / "spades_work"
+        dest = outdir / "unitigs.fasta"
+        if dest.is_file() and dest.stat().st_size > 0 and not force:
+            LOGGER.info("Reusing existing unitigs: %s", dest)
+            return dest
 
+        work = outdir / "ggcat_work"
+        tmp = work / "tmp"
+        if work.exists() and force:
+            shutil.rmtree(work)
+        work.mkdir(parents=True, exist_ok=True)
+        tmp.mkdir(parents=True, exist_ok=True)
+
+        raw = work / "unitigs.raw.fasta"
+        for stale in (raw, Path(str(raw) + ".lz4")):
+            if stale.is_file():
+                stale.unlink()
         argv = [
-            "metaspades.py",
-            "-1",
-            str(r1),
-            "-2",
-            str(r2),
-            "-o",
-            str(work),
-            "-t",
+            "ggcat",
+            "build",
+            "-k",
+            str(kmer),
+            "-j",
             str(threads),
             "-m",
             str(memory_gb),
+            "-s",
+            str(min_multiplicity),
+            "-t",
+            str(tmp),
+            "-o",
+            str(raw),
+            str(r1),
+            str(r2),
         ]
-        self._run(
-            argv,
-            workdir=outdir,
-            log_prefix="metaspades",
-        )
+        if not raw.exists():
+            self._run(
+                argv,
+                workdir=outdir,
+                log_prefix="ggcat",
+            )
 
-        src = work / "contigs.fasta"
-        if not src.is_file() or src.stat().st_size == 0:
-            raise ToolError(f"metaSPAdes produced an empty contigs file: {src}")
-        dest = outdir / "contigs.fasta"
-        shutil.copy2(src, dest)
-        scaffolds = work / "scaffolds.fasta"
-        if scaffolds.is_file() and scaffolds.stat().st_size > 0:
-            shutil.copy2(scaffolds, outdir / "scaffolds.fasta")
-        LOGGER.info("Assembly contigs: %s", dest)
+        produced = _ggcat_output_fasta(raw)
+        if produced is None:
+            raise ToolError(f"GGCAT produced no unitig FASTA at {raw}")
+        n_kept = filter_fasta_min_length(produced, dest, min_length=min_unitig_len)
+        if n_kept == 0 or not dest.is_file() or dest.stat().st_size == 0:
+            raise ToolError(f"GGCAT produced no unitigs >= {min_unitig_len} bp: {dest}")
+        LOGGER.info("Assembly unitigs: %s (%d sequences)", dest, n_kept)
         return dest
 
     # ── Step 2: Kraken2 ───────────────────────────────────────────────────
@@ -225,11 +251,12 @@ class ToolRunner:
             "--use-names",
             str(contigs),
         ]
-        self._run(
-            argv,
-            workdir=outdir,
-            log_prefix="kraken2",
-        )
+        if not assignments.exists():
+            self._run(
+                argv,
+                workdir=outdir,
+                log_prefix="kraken2",
+            )
         if not assignments.is_file():
             raise ToolError(f"Kraken2 did not write assignments: {assignments}")
         if not report.is_file():
@@ -237,7 +264,7 @@ class ToolRunner:
         if not unclassified.is_file():
             unclassified.write_text("", encoding="utf-8")
             LOGGER.warning("Kraken2 wrote no --unclassified-out file; treating as empty")
-        LOGGER.info("Kraken2 unclassified contigs: %s", unclassified)
+        LOGGER.info("Kraken2 unclassified sequences: %s", unclassified)
         return assignments, report, unclassified
 
     # ── Step 4: SeqScreen ─────────────────────────────────────────────────
@@ -274,15 +301,55 @@ class ToolRunner:
         ]
         if extra_args:
             argv.extend(shlex.split(extra_args))
+        canonical = working / "report_generation" / "seqscreen_report.tsv"
 
-        self._run(
-            argv,
-            workdir=workdir,
-            log_prefix="seqscreen",
-        )
+        if not canonical.exists():
+            self._run(
+                argv,
+                workdir=workdir,
+                log_prefix="seqscreen",
+            )
         _normalise_seqscreen_report(working)
         LOGGER.info("SeqScreen working dir: %s", working)
         return working
+
+
+def _ggcat_output_fasta(raw: Path) -> Path | None:
+    """Return the GGCAT FASTA path, including a possible ``.lz4`` suffix."""
+    candidates = [
+        raw,
+        Path(str(raw) + ".lz4"),
+        raw.with_suffix(raw.suffix + ".lz4"),
+        raw.with_suffix(".fasta"),
+        raw.with_suffix(".fa"),
+    ]
+    for path in candidates:
+        if path.is_file() and path.stat().st_size > 0:
+            if path.suffix == ".lz4":
+                return _decompress_lz4(path, raw if raw.suffix != ".lz4" else path.with_suffix(""))
+            return path
+    parent = raw.parent
+    matches = sorted(parent.glob("*.fasta")) + sorted(parent.glob("*.fa")) + sorted(parent.glob("*.fasta.lz4"))
+    for path in matches:
+        if path.is_file() and path.stat().st_size > 0:
+            if str(path).endswith(".lz4"):
+                uncompressed = path.with_name(path.name[: -len(".lz4")])
+                return _decompress_lz4(path, uncompressed)
+            return path
+    return None
+
+
+def _decompress_lz4(src: Path, dest: Path) -> Path:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    run_command(
+        ["lz4", "-d", "-f", str(src), str(dest)],
+        cwd=src.parent,
+        log_dir=src.parent,
+        log_prefix="lz4",
+    )
+    if not dest.is_file() or dest.stat().st_size == 0:
+        raise ToolError(f"Failed to decompress GGCAT output {src}")
+    return dest
 
 
 def _normalise_seqscreen_report(working: Path) -> None:

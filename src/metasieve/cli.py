@@ -25,8 +25,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="metasieve",
         description=(
-            "Metasieve — assemble paired-end reads, keep Kraken2-unclassified "
-            "contigs, screen with SeqScreen (fast), and fold ORFs with Hugging Face ESMFold."
+            "Metasieve — assemble paired-end reads into GGCAT unitigs, keep "
+            "Kraken2-unclassified sequences, screen with SeqScreen (fast), and "
+            "fold ORFs with Hugging Face ESMFold. Supply --unitigs, "
+            "--unclassified, or --orfs to skip earlier steps."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -47,6 +49,35 @@ def build_parser() -> argparse.ArgumentParser:
     io.add_argument("--r1", type=Path, default=None, help="Forward reads (single sample).")
     io.add_argument("--r2", type=Path, default=None, help="Reverse reads (single sample).")
     io.add_argument("--sample_id", "--sample-id", dest="sample_id", default=None)
+    io.add_argument(
+        "--unitigs",
+        "--unitigs-fasta",
+        dest="unitigs",
+        default=None,
+        help="Assembled unitigs FASTA (file, directory, or glob). Skips GGCAT.",
+    )
+    io.add_argument(
+        "--unclassified",
+        "--unclassified-fasta",
+        dest="unclassified",
+        default=None,
+        help="Kraken2 unclassified FASTA (file, directory, or glob). Skips GGCAT and Kraken2.",
+    )
+    io.add_argument(
+        "--orfs",
+        "--orf-fasta",
+        dest="orfs",
+        default=None,
+        help="ORF protein FASTA or directory of per-ORF .faa files. Skips to ESMFold.",
+    )
+    io.add_argument(
+        "--start_from",
+        "--start-from",
+        dest="start_from",
+        choices=["auto", "assembly", "classification", "unclassified", "folding"],
+        default=None,
+        help="First step to run (default: infer from --reads/--unitigs/--unclassified/--orfs).",
+    )
     io.add_argument(
         "--outdir",
         type=Path,
@@ -87,7 +118,8 @@ def build_parser() -> argparse.ArgumentParser:
     tools.add_argument("--seqscreen_mode", dest="seqscreen_mode", default=None)
     tools.add_argument("--seqscreen_extra_args", dest="seqscreen_extra_args", default=None)
     tools.add_argument("--kraken2_confidence", dest="kraken2_confidence", type=float, default=None)
-    tools.add_argument("--min_contig_len", dest="min_contig_len", type=int, default=None)
+    tools.add_argument("--min_contig_len", dest="min_contig_len", type=int, default=None,
+                       help="Drop unitigs / unclassified sequences shorter than this (bp).")
     tools.add_argument("--min_orf_aa", dest="min_orf_aa", type=int, default=None)
     tools.add_argument("--max_orf_aa", dest="max_orf_aa", type=int, default=None)
     orf_start = tools.add_mutually_exclusive_group()
@@ -105,13 +137,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.set_defaults(require_orf_start=None)
     tools.add_argument("--genetic_code", dest="genetic_code", type=int, default=None)
+    tools.add_argument(
+        "--ggcat_kmer",
+        "--ggcat-kmer",
+        dest="ggcat_kmer",
+        type=int,
+        default=None,
+        help="GGCAT k-mer length for unitig construction (default: 31).",
+    )
+    tools.add_argument(
+        "--ggcat_min_multiplicity",
+        "--ggcat-min-multiplicity",
+        dest="ggcat_min_multiplicity",
+        type=int,
+        default=None,
+        help="GGCAT minimum k-mer multiplicity (-s; default: 2).",
+    )
     tools.add_argument("--esmfold_num_recycles", dest="esmfold_num_recycles", type=int, default=None)
     tools.add_argument("--esmfold_chunk_size", dest="esmfold_chunk_size", type=int, default=None)
     tools.add_argument("--skip_esmfold", dest="skip_esmfold", action="store_true", default=None)
 
     runtime = parser.add_argument_group("runtime")
-    runtime.add_argument("--threads", type=int, default=None, help="CPU threads for assembly/taxonomy/SeqScreen.")
-    runtime.add_argument("--memory_gb", "--memory-gb", dest="memory_gb", type=int, default=None)
+    runtime.add_argument("--threads", type=int, default=None, help="CPU threads for GGCAT/Kraken2/SeqScreen.")
+    runtime.add_argument(
+        "--memory_gb",
+        "--memory-gb",
+        dest="memory_gb",
+        type=int,
+        default=None,
+        help="GGCAT memory cap in GB (passed to ggcat build -m).",
+    )
     runtime.add_argument(
         "--log_level",
         "--log-level",
