@@ -22,7 +22,7 @@ From these files, the dashboard will provide multiple figures and statistics sum
  <img height="300" alt="image" src="https://github.com/user-attachments/assets/46a49b03-2fb2-42fb-a7c2-af771315927c" />
 
 
-3.  The Kraken2 analysis summary features two main charts: a pie chart showing the dataset-wide taxonomic breakdown (including the 78.8\% unclassified reads count alongside bacteria, eukaryota, and archaea percentages) and a bar chart showing the read distribution per sample across all 21 analyzed samples.
+3.  The Kraken2 analysis summary features two main charts: a pie chart showing the dataset-wide taxonomic breakdown (including the unclassified reads count alongside bacteria, eukaryota, and archaea percentages) and a bar chart showing the read distribution per sample across all analyzed samples.
 
    
    <img height="300" alt="image" src="https://github.com/user-attachments/assets/61168581-d8e3-48a3-b73e-e0b544d7faab" />
