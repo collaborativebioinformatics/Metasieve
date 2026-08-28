@@ -14,7 +14,7 @@ from reportlab.lib import colors
 # Default Demo paths
 demo_data_dir = Path("Demo Data")
 DEMO_KRAKEN = demo_data_dir / "samples_kraken2report"
-DEMO_SEQSCREEN = demo_data_dir / "seqscreen_output_sample.txt"
+DEMO_SEQSCREEN = demo_data_dir / "seqscreen_output_sample.csv"
 DEMO_PDB_DIR = demo_data_dir / "samples_pdbs"
 
 CACHE_DIR = Path("pipeline_output_cache").resolve()
@@ -134,29 +134,32 @@ def run_pipeline_backend(mode="demo", kraken_folder="", kraken_pattern="*.k2repo
 
     # 2. Process SeqScreen Report
     try:
-        df_s = pd.read_csv(s_file, sep="\t")
+        df_s = pd.read_csv(s_file, sep=None, engine="python")
     except Exception:
         df_s = pd.DataFrame({
-            "query_id": [f"seq_{i}" for i in range(50)],
-            "organism": ["Unclassified" if i % 2 == 0 else "Bacteria" for i in range(50)]
+            "sample_id": [f"sample_1" for _ in range(50)],
+            "seqscreen_query": [f"seq_{i}" for i in range(50)],
+            "seqscreen_annotation": ["Unclassified" if i % 2 == 0 else "Bacteria" for i in range(50)]
         })
     
+    if "organism" not in df_s.columns:
+        if "seqscreen_annotation" in df_s.columns:
+            df_s["organism"] = df_s["seqscreen_annotation"].fillna("Unclassified")
+        elif "seqscreen_taxid" in df_s.columns:
+            df_s["organism"] = df_s["seqscreen_taxid"].fillna("Unclassified")
+        else:
+            df_s["organism"] = "Unclassified"
+
+    df_s["organism"] = df_s["organism"].astype(str).replace(["nan", "None", ""], "Unclassified")
+
     seqscreen_csv_path = output_dir / "seqscreen_processed.csv"
     df_s.to_csv(seqscreen_csv_path, index=False)
-
-    total_queries = int(len(df_s))
-    unclass_seqs = df_s[df_s["organism"].str.lower() == "unclassified"] if "organism" in df_s.columns else pd.DataFrame()
-    class_seqs = df_s[df_s["organism"].str.lower() != "unclassified"] if "organism" in df_s.columns else df_s
-    
-    num_unclassified = int(len(unclass_seqs))
-    num_classified = int(len(class_seqs))
 
     # 3. Extract PDB Data Directly into Table
     df_pdb = extract_pdb_metadata(p_dir)
     pdb_table_csv = output_dir / "pdb_extracted_metadata.csv"
     df_pdb.to_csv(pdb_table_csv, index=False)
 
-    passing_esm = int(len(df_pdb[df_pdb["Mean pLDDT"] >= 70.0]))
     pdb_choices = {str(row["PDB File"]): str(row["PDB File"]) for _, row in df_pdb.iterrows()}
 
     metadata = {
@@ -200,7 +203,7 @@ app_ui = ui.page_fluid(
                 ui.h6("Inputs Guidelines:"),
                 ui.tags.ul(
                     ui.tags.li("Kraken2: Path to .k2report reports folder."),
-                    ui.tags.li("SeqScreen: Path to Seqscreen report file."),
+                    ui.tags.li("SeqScreen: Path to Seqscreen report file (.csv or .tsv)."),
                     ui.tags.li("PDB Folder: Path to ESMFold pdb files folder"),
                 ),
                 class_="alert alert-light border p-3 small",
@@ -280,18 +283,23 @@ def server(input, output, session):
             ),
             ui.br(),
             
-            # 2. SeqScreen Summary
+            # 2. SeqScreen Summary & Data Table
             ui.h3("2. SeqScreen Analysis Summary", class_="mt-2"),
             ui.layout_columns(
                 ui.card(
                     ui.card_header("SeqScreen Summary Statistics"),
                     ui.output_text_verbatim("stats_output"),
                 ),
-                ui.card(
-                    ui.card_header("SeqScreen Taxonomic Distribution Chart"),
-                    ui.output_plot("seqscreen_pie_plot", height="380px"),
+                col_widths=12,
+            ),
+            ui.br(),
+            ui.card(
+                ui.card_header("SeqScreen Output Table"),
+                ui.div(
+                    ui.output_data_frame("seqscreen_table"),
+                    class_="table-responsive border rounded bg-white p-2 shadow-sm"
                 ),
-                col_widths=(6, 6),
+                full_screen=True
             ),
             ui.br(),
             
@@ -409,60 +417,53 @@ def server(input, output, session):
         if not csv_path.exists():
             return "Please run pipeline to view SeqScreen statistics."
         df = pd.read_csv(csv_path)
-        if df.empty or "organism" not in df.columns:
-            return "SeqScreen data is empty or missing organism column."
+        if df.empty:
+            return "SeqScreen data is empty."
 
         total_queries = len(df)
-        unclassified_df = df[df["organism"].str.lower() == "unclassified"]
-        classified_df = df[df["organism"].str.lower() != "unclassified"]
-
-        num_unclassified = len(unclassified_df)
-        num_classified = len(classified_df)
-        pct_unclassified = (num_unclassified / total_queries) * 100 if total_queries > 0 else 0
-        pct_classified = (num_classified / total_queries) * 100 if total_queries > 0 else 0
-
-        stats_str = (
-            f"=== SeqScreen Metagenomic Summary Statistics ===\n"
-            f"Total Sequences Analyzed: {total_queries}\n"
-            f"Classified Sequences:     {num_classified} ({pct_classified:.2f}%)\n"
-            f"Unclassified Sequences:   {num_unclassified} ({pct_unclassified:.2f}%)\n\n"
-            f"=== Classified Taxa Breakdown ===\n"
-        )
-
-        organism_counts = classified_df["organism"].value_counts().head(5)
-        for org, count in organism_counts.items():
-            org_pct_total = (count / total_queries) * 100
-            org_pct_classified = (count / num_classified) * 100 if num_classified > 0 else 0
-            stats_str += f"• {org}: {count} sequences ({org_pct_total:.2f}% of total, {org_pct_classified:.2f}% of classified)\n"
-
+        stats_str = f"Total Sequences Identified: {total_queries}"
         return stats_str
 
-    @render.plot
-    def seqscreen_pie_plot():
+    @render.data_frame
+    def seqscreen_table():
         csv_path = CACHE_DIR / "seqscreen_processed.csv"
         if not csv_path.exists():
-            fig, ax = plt.subplots(figsize=(6, 3))
-            ax.text(0.5, 0.5, "Awaiting SeqScreen data...", ha="center", va="center")
-            ax.axis("off")
-            return fig
-        
+            return render.DataGrid(pd.DataFrame())
         df = pd.read_csv(csv_path)
-        total_queries = len(df)
-        unclassified_count = len(df[df["organism"].str.lower() == "unclassified"]) if "organism" in df.columns else 0
-        classified_df = df[df["organism"].str.lower() != "unclassified"] if "organism" in df.columns else df
-        org_counts = classified_df["organism"].value_counts().head(5) if "organism" in classified_df.columns else pd.Series()
         
-        labels = ["Unclassified"]
-        sizes = [unclassified_count]
-        for org, count in org_counts.items():
-            labels.append(str(org))
-            sizes.append(count)
+        # Columns to drop / not show
+        cols_to_drop = [
+            "seqscreen_uniref", 
+            "seqscreen_query", 
+            "seqscreen_taxid", 
+            "organism", 
+            "fasta header", 
+            "record id", 
+            "slpil fasta"
+        ]
+        # Drop columns if they exist in df (case-insensitive or exact match handling)
+        existing_cols_to_drop = [c for c in cols_to_drop if c in df.columns]
+        df = df.drop(columns=existing_cols_to_drop)
+        
+        # Reorder columns: make 'aa_seq' before last column, and 'seqscreen_annotation' last
+        cols = [c for c in df.columns if c not in ["aa_seq", "seqscreen_annotation"]]
+        
+        has_aa = "aa_seq" in df.columns
+        has_ann = "seqscreen_annotation" in df.columns
+        
+        new_cols = []
+        if has_aa and has_ann:
+            # aa_seq before last column means second to last, seqscreen_annotation last
+            new_cols = cols + ["aa_seq", "seqscreen_annotation"]
+        elif has_aa:
+            new_cols = cols + ["aa_seq"]
+        elif has_ann:
+            new_cols = cols + ["seqscreen_annotation"]
+        else:
+            new_cols = cols
             
-        fig, ax = plt.subplots(figsize=(6, 3.8))
-        ax.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=140, colors=plt.cm.tab20c.colors[:len(sizes)])
-        ax.set_title(f"SeqScreen Taxonomic Distribution\n(Total Queries: {total_queries})", fontsize=11, fontweight="bold")
-        plt.tight_layout()
-        return fig
+        df = df[[c for c in new_cols if c in df.columns]]
+        return render.DataGrid(df, filters=True, selection_mode="row")
 
     @render.data_frame
     def pdb_extracted_table():
@@ -659,37 +660,15 @@ def server(input, output, session):
             elements.append(chart_table)
         elements.append(Spacer(1, 15))
 
-        # --- 2. SeqScreen Summary & Chart Section ---
+        # --- 2. SeqScreen Summary Section ---
         elements.append(Paragraph("2. SeqScreen Analysis Summary", h2_style))
         seq_csv = CACHE_DIR / "seqscreen_processed.csv"
         if seq_csv.exists():
             df_s = pd.read_csv(seq_csv)
             if not df_s.empty:
                 total_q = len(df_s)
-                unclass_q = len(df_s[df_s["organism"].str.lower() == "unclassified"]) if "organism" in df_s.columns else 0
-                class_q = total_q - unclass_q
-                seq_summary_html = f"<b>Total Sequences Analyzed:</b> {total_q}<br/><b>Classified Sequences:</b> {class_q}<br/><b>Unclassified Sequences:</b> {unclass_q}"
+                seq_summary_html = f"<b>Total Sequences Identified:</b> {total_q}"
                 elements.append(Paragraph(seq_summary_html, styles['Normal']))
-                elements.append(Spacer(1, 8))
-
-                # Generate and save SeqScreen pie chart for PDF
-                fig, ax = plt.subplots(figsize=(5, 3.2))
-                classified_df_plot = df_s[df_s["organism"].str.lower() != "unclassified"] if "organism" in df_s.columns else df_s
-                org_counts = classified_df_plot["organism"].value_counts().head(5) if "organism" in classified_df_plot.columns else pd.Series()
-                s_labels = ["Unclassified"]
-                s_sizes = [unclass_q]
-                for org, count in org_counts.items():
-                    s_labels.append(str(org))
-                    s_sizes.append(count)
-                ax.pie(s_sizes, labels=s_labels, autopct="%1.1f%%", startangle=140, colors=plt.cm.tab20c.colors[:len(s_sizes)], textprops={'fontsize': 7})
-                ax.set_title("SeqScreen Taxonomic Distribution", fontsize=9, fontweight="bold")
-                plt.tight_layout()
-                seq_pie_img = SNAPSHOT_DIR / "pdf_seqscreen_pie.png"
-                fig.savefig(seq_pie_img, dpi=150, bbox_inches='tight')
-                plt.close(fig)
-
-                if seq_pie_img.exists():
-                    elements.append(Image(str(seq_pie_img), width=260, height=160))
         elements.append(Spacer(1, 15))
 
         # --- 3. ESMFold Structural Analysis Summary ---
@@ -701,7 +680,6 @@ def server(input, output, session):
         elements.append(Paragraph(f"Final output of the ESM filtering resulted in identifying {total_esm_rows} number of de novo non-classified sequences.", styles['Normal']))
         elements.append(Spacer(1, 6))
 
-        # First 5 rows table
         if not df_esm.empty:
             df_head = df_esm.head(5)
             table_data = [[str(c) for c in df_head.columns]]
