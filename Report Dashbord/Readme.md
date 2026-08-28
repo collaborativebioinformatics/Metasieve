@@ -12,13 +12,14 @@ It's simply a visual summary of the main  MetaSieve pipeline
   <img height="300" alt="image" src="https://github.com/user-attachments/assets/342c05c3-d567-4e6d-8fba-3ba6f8e7244a" />
 
  
-2. Otherwise, there is a Demonstration option.
-   <img height="300" alt="image" src="https://github.com/user-attachments/assets/46a49b03-2fb2-42fb-a7c2-af771315927c" />
+2. Otherwise, there is a Demonstration option
+
+ <img height="300" alt="image" src="https://github.com/user-attachments/assets/46a49b03-2fb2-42fb-a7c2-af771315927c" />
 
 
-3. The data will analyzed and summarising charts will be genrated
+3. The data will be analyzed and charts will be genrated
 
-Note : these are basic charts, to be replaced with more valuable data later
+#### Note : These are basic charts, to be replaced with more valuable data later
    
    <img height="300" alt="image" src="https://github.com/user-attachments/assets/61168581-d8e3-48a3-b73e-e0b544d7faab" />
 
@@ -28,12 +29,11 @@ Note : these are basic charts, to be replaced with more valuable data later
    
    <img height="300" alt="image" src="https://github.com/user-attachments/assets/03c97a60-e842-4b10-b44a-cd326db41839" />
 
-
+  Demo CSV file : https://github.com/collaborativebioinformatics/Metasieve/blob/main/Report%20Dashbord/outputs/candidates.csv
+  
 4. Structural prediction using chimera could be performed on the final Selection
 
 <img height="300" alt="image" src="https://github.com/user-attachments/assets/d1196c79-3540-49ea-9c6d-0187e3cf85d6" />
-
-  Demo CSV file : https://github.com/collaborativebioinformatics/Metasieve/blob/main/Report%20Dashbord/outputs/candidates.csv
 
 5. Finally all the data could be downloaded in a PDF file
 
