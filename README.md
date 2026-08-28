@@ -1,5 +1,5 @@
 # Metasieve
-
+<img src="metasieve_logo.png" width="200">
 ## Overview of Metasieve
 
 Mining environmental metagenomes for deeply novel biological sequence and structure
