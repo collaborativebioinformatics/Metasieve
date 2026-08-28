@@ -15,6 +15,8 @@ Natalie Kokroko, Rice University\
 Jingyue Wu, Baylor College of Medicine\
 Mohamed Abdelrahim
 
+## Workflow overview
+
 
 ## Software Requirements
 1. [GGCAT](https://github.com/algbio/GGCAT)
@@ -23,7 +25,14 @@ Mohamed Abdelrahim
 4. [ESMFold](https://esmatlas.com/)
 5. [Foldseek](https://github.com/steineggerlab/foldseek)
 
-## Workflow Overview
+Raw paired-end short reads are assembled into unitigs and classified with
+Kraken2. Unclassified sequences come from Kraken2 `--unclassified-out` and
+are screened with SeqScreen (fast mode). Only queries that SeqScreen did
+not assign a taxid **and** did not hit UniRef/UniProt are six-frame
+translated. Those protein sequences are folded with Hugging Face ESMFold.
+Every PDB is named and indexed so it traces back to the originating unitig
+and ORF.
+
 
 <img src="images/metasieve_workflow.png" width="750">
 
