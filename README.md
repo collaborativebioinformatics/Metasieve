@@ -18,12 +18,17 @@ Mohamed Abdelrahim
 ## Workflow overview
 
 
-## Software Requirements
-1. [GGCAT](https://github.com/algbio/GGCAT)
-2. [Kraken2](https://github.com/DerrickWood/kraken2/)
-3. [Seqscreen](https://gitlab.com/treangenlab/seqscreen)
-4. [ESMFold](https://esmatlas.com/)
-5. [Foldseek](https://github.com/steineggerlab/foldseek)
+### Software requirements
+
+| Stage           | Tool | Notes |
+|-----------------| --- | --- |
+| Assembly        | [GGCAT](https://github.com/algbio/GGCAT) | Paired-end short reads → maximal unitigs (`unitigs.fasta`) |
+| Taxonomy        | [Kraken2](https://github.com/DerrickWood/kraken2/) | `--unclassified-out` FASTA is fed to SeqScreen |
+| Functions       | [Seqscreen](https://gitlab.com/treangenlab/seqscreen) | Fast mode; keep queries with no taxid and no UniRef/UniProt hit |
+| (WIP) Structure | Hugging Face [ESMFold](https://esmatlas.com/) | `transformers` + PyTorch; default `facebook/esmfold_v1` |
+| Orchestration   | Python ≥ 3.10 | Host binaries on PATH (`ggcat`, `kraken2`, `seqscreen`) |
+
+
 
 Raw paired-end short reads are assembled into unitigs and classified with
 Kraken2. Unclassified sequences come from Kraken2 `--unclassified-out` and
@@ -43,6 +48,7 @@ and ORF.
 4. [Cacao Soil Metagenomics](https://www.ncbi.nlm.nih.gov/sra/SRX34351257[accn]): 25.6G bases
 
 ## Command Lines
+
 ```
  prefetch \
     SRR000001 \
@@ -69,6 +75,17 @@ and ORF.
     --databases SeqScreenDB_23.4 \
     --working seqscreen_out \
     --threads 16 \
+```
+
+## Quick start
+
+```bash
+python main.py \
+    --reads 'data/*_{1,2}.fastq.gz' \
+    --kraken_db /data/dbs/kraken2 \
+    --seqscreen_db /data/dbs/seqscreen_databases \
+    --threads 16 \
+    --outdir results
 ```
 
 ## Dashboard Summary 
