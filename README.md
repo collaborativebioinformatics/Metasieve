@@ -1,5 +1,7 @@
 # Metasieve
 
+## Overview of Metasieve
+
 Mining environmental metagenomes for deeply novel biological sequence and structure
 
 This is a metagenomic bioprospecting workflow designed to identify
