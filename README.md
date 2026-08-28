@@ -25,7 +25,7 @@ Mohamed Abdelrahim
 
 ## Workflow Overview
 
-<img src="images/Metasieve_workflow2.png" width="750">
+<img src="images/metasieve_workflow.png" width="750">
 
 ## Required Data
 1. [Kraken2 Database: k2\_pluspf\_20260626.tar.gz](https://benlangmead.github.io/aws-indexes/k2): 
