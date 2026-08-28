@@ -17,13 +17,13 @@ This dashboard provides a visual summary of the results from the MetaSieve pipel
  <img height="300" alt="image" src="https://github.com/user-attachments/assets/46a49b03-2fb2-42fb-a7c2-af771315927c" />
 
 
-All data will be analyzed and charts will be generated based on the data provided
-
-#### Note : These charts will be updated in the future
+3. Data will be analyzed and charts will be generated based on the data provided
    
    <img height="300" alt="image" src="https://github.com/user-attachments/assets/61168581-d8e3-48a3-b73e-e0b544d7faab" />
+   
+   <img width="1874" height="890" alt="image" src="https://github.com/user-attachments/assets/67e3494b-3dfe-4df7-83a6-33d84473d741" />
 
-   <img height="300" alt="image" src="https://github.com/user-attachments/assets/269b0a4c-239e-4e89-882b-7766ad6e5cd7" />
+    <img width="1848" height="554" alt="image" src="https://github.com/user-attachments/assets/295ed376-0275-439f-864f-fe77b03f083c" />
 
 4. The final list and ESMFold data can be downloaded in a csv file
    
@@ -39,8 +39,7 @@ All data will be analyzed and charts will be generated based on the data provide
 
    <img height="300" alt="image" src="https://github.com/user-attachments/assets/7561820d-d80e-4b45-9643-05bbf3f411b8" />
 
-   Demo PDF file : [Report Dashbord/outputs/comprehensive_analysis_report.pdf ](https://github.com/collaborativebioinformatics/Metasieve/blob/main/dashbord/outputs/comprehensive_analysis_report.pdf) 
-
+   Demo PDF file : https://github.com/collaborativebioinformatics/Metasieve/blob/main/dashboard/outputs/Metasieve_Analysis_Summary.pdf 
 
 # How-to-Run
 
