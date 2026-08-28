@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 import glob
 import matplotlib.pyplot as plt
+import seaborn as sns
 import pandas as pd
 from shiny import App, render, ui, reactive
 from reportlab.lib.pagesizes import A4
@@ -126,8 +127,7 @@ def run_pipeline_backend(mode="demo", kraken_folder="", kraken_pattern="*.k2repo
                 pass
 
     summary_df = pd.DataFrame(summary_data)
-    kraken_summary_csv = output_dir / "kraken_summary.csv"
-    summary_df.to_csv(kraken_summary_csv, index=False)
+    summary_df.to_csv(output_dir / "kraken_summary.csv", index=False)
 
     domain_df = pd.DataFrame(list(domain_reads_aggregate.items()), columns=["Domain", "Reads"])
     domain_df.to_csv(output_dir / "kraken_domains.csv", index=False)
@@ -151,14 +151,11 @@ def run_pipeline_backend(mode="demo", kraken_folder="", kraken_pattern="*.k2repo
             df_s["organism"] = "Unclassified"
 
     df_s["organism"] = df_s["organism"].astype(str).replace(["nan", "None", ""], "Unclassified")
-
-    seqscreen_csv_path = output_dir / "seqscreen_processed.csv"
-    df_s.to_csv(seqscreen_csv_path, index=False)
+    df_s.to_csv(output_dir / "seqscreen_processed.csv", index=False)
 
     # 3. Extract PDB Data Directly into Table
     df_pdb = extract_pdb_metadata(p_dir)
-    pdb_table_csv = output_dir / "pdb_extracted_metadata.csv"
-    df_pdb.to_csv(pdb_table_csv, index=False)
+    df_pdb.to_csv(output_dir / "pdb_extracted_metadata.csv", index=False)
 
     pdb_choices = {str(row["PDB File"]): str(row["PDB File"]) for _, row in df_pdb.iterrows()}
 
@@ -283,7 +280,7 @@ def server(input, output, session):
             ),
             ui.br(),
             
-            # 2. SeqScreen Summary & Data Table
+            # 2. SeqScreen Summary & 6-Frame Exploratory Analysis
             ui.h3("2. SeqScreen Analysis Summary", class_="mt-2"),
             ui.layout_columns(
                 ui.card(
@@ -291,6 +288,11 @@ def server(input, output, session):
                     ui.output_text_verbatim("stats_output"),
                 ),
                 col_widths=12,
+            ),
+            ui.br(),
+            ui.card(
+                ui.card_header("6-Frame ORF & Length Distribution Analysis"),
+                ui.output_plot("seqscreen_frame_plot", height="650px"),
             ),
             ui.br(),
             ui.card(
@@ -421,8 +423,72 @@ def server(input, output, session):
             return "SeqScreen data is empty."
 
         total_queries = len(df)
-        stats_str = f"Total Sequences Identified: {total_queries}"
-        return stats_str
+        return f"Total Sequences Identified: {total_queries}"
+
+    @render.plot
+    def seqscreen_frame_plot():
+        csv_path = CACHE_DIR / "seqscreen_processed.csv"
+        if not csv_path.exists():
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.text(0.5, 0.5, "No SeqScreen data available.", ha="center", va="center")
+            ax.axis("off")
+            return fig
+            
+        df = pd.read_csv(csv_path)
+        sns.set_theme(style="whitegrid")
+        fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+
+        frame_counts = df["frame"].value_counts().sort_index() if "frame" in df.columns else pd.Series()
+        
+        # 1. 6-Frame Distribution Comparison
+        if not frame_counts.empty:
+            sns.barplot(x=frame_counts.index, y=frame_counts.values, ax=axes[0, 0], palette="Blues_d")
+        axes[0, 0].set_title("ORF Count Distribution Across 6 Translation Frames", fontsize=10, fontweight="bold")
+        axes[0, 0].set_xlabel("Translation Frame", fontsize=9)
+        axes[0, 0].set_ylabel("Number of ORFs", fontsize=9)
+
+        # 2. Strand Distribution per Frame
+        if "strand" in df.columns and "frame" in df.columns:
+            sns.countplot(data=df, x="frame", hue="strand", ax=axes[0, 1], palette="Set2")
+        axes[0, 1].set_title("Strand Orientation Breakdown per Frame", fontsize=10, fontweight="bold")
+        axes[0, 1].set_xlabel("Translation Frame", fontsize=9)
+        axes[0, 1].set_ylabel("Count", fontsize=9)
+        axes[0, 1].legend(title="Strand", fontsize=8)
+
+        # 3. Amino Acid Length Distribution across Frames
+        if "aa_length" in df.columns and "frame" in df.columns:
+            sns.boxplot(data=df, x="frame", y="aa_length", ax=axes[1, 0], palette="Pastel1")
+        axes[1, 0].set_title("Amino Acid Length Distribution by Frame", fontsize=10, fontweight="bold")
+        axes[1, 0].set_xlabel("Translation Frame", fontsize=9)
+        axes[1, 0].set_ylabel("Amino Acid Length", fontsize=9)
+
+        # 4. Summary Stats Panel
+        axes[1, 1].axis("off")
+        total_seqs = len(df)
+        mean_len = df["aa_length"].mean() if "aa_length" in df.columns else 0
+        max_len = df["aa_length"].max() if "aa_length" in df.columns else 0
+        
+        summary_text = (
+            f"=== SeqScreen Dataset Metrics ===\n\n"
+            f"• Total Sequences Identified: {total_seqs:,}\n"
+            f"• Mean Amino Acid Length:   {mean_len:.1f} aa\n"
+            f"• Max Amino Acid Length:    {max_len:,} aa\n"
+            f"• Strand Counts:\n"
+        )
+        if "strand" in df.columns:
+            plus_count = len(df[df['strand'] == '+'])
+            minus_count = len(df[df['strand'] == '-'])
+            summary_text += f"    + Strand: {plus_count:,}\n    - Strand: {minus_count:,}\n\n"
+        
+        summary_text += "• Frame Counts:\n"
+        for f_val, count in frame_counts.items():
+            summary_text += f"    Frame {f_val:+d}: {count:,}\n"
+
+        axes[1, 1].text(0.05, 0.5, summary_text, fontsize=9, family="monospace", verticalalignment="center",
+                        bbox=dict(boxstyle="round,pad=1", facecolor="whitesmoke", edgecolor="lightgray"))
+
+        plt.tight_layout()
+        return fig
 
     @render.data_frame
     def seqscreen_table():
@@ -431,29 +497,18 @@ def server(input, output, session):
             return render.DataGrid(pd.DataFrame())
         df = pd.read_csv(csv_path)
         
-        # Columns to drop / not show
         cols_to_drop = [
-            "seqscreen_uniref", 
-            "seqscreen_query", 
-            "seqscreen_taxid", 
-            "organism", 
-            "fasta header", 
-            "record id", 
-            "slpil fasta"
+            "seqscreen_uniref", "seqscreen_query", "seqscreen_taxid", 
+            "organism", "fasta header", "record id", "slpil fasta"
         ]
-        # Drop columns if they exist in df (case-insensitive or exact match handling)
         existing_cols_to_drop = [c for c in cols_to_drop if c in df.columns]
         df = df.drop(columns=existing_cols_to_drop)
         
-        # Reorder columns: make 'aa_seq' before last column, and 'seqscreen_annotation' last
         cols = [c for c in df.columns if c not in ["aa_seq", "seqscreen_annotation"]]
-        
         has_aa = "aa_seq" in df.columns
         has_ann = "seqscreen_annotation" in df.columns
         
-        new_cols = []
         if has_aa and has_ann:
-            # aa_seq before last column means second to last, seqscreen_annotation last
             new_cols = cols + ["aa_seq", "seqscreen_annotation"]
         elif has_aa:
             new_cols = cols + ["aa_seq"]
@@ -526,9 +581,6 @@ def server(input, output, session):
                 stderr=subprocess.PIPE, 
                 text=True
             )
-        except subprocess.CalledProcessError as e:
-            err_details = e.stderr.strip() if e.stderr else str(e)
-            return ui.p(f"ChimeraX process error: {err_details}", class_="text-danger")
         except Exception as e:
             return ui.p(f"Error rendering via ChimeraX: {e}", class_="text-danger")
 
@@ -537,7 +589,7 @@ def server(input, output, session):
             img_url = f"/reports/{output_image_path.name}?t={file_mtime}"
             return ui.tags.img(src=img_url, style="width: 100%; min-height: 450px; object-fit: contain; border-radius: 4px; background-color: white;")
             
-        return ui.p("ChimeraX finished execution, but the output image was not generated. Check console logs.")
+        return ui.p("ChimeraX finished execution, but the output image was not generated.")
 
     @output
     @render.ui
@@ -560,7 +612,6 @@ def server(input, output, session):
             ),
             class_="card p-3 bg-light border-success mt-4"
         )
-
     @render.download(filename="Metasieve_Analysis_Summary.pdf")
     def download_pdf_report():
         pdf_output = SNAPSHOT_DIR / "Metasieve_Analysis_Summary.pdf"
@@ -568,28 +619,9 @@ def server(input, output, session):
         elements = []
         styles = getSampleStyleSheet()
 
-        title_style = ParagraphStyle(
-            'HeaderTitle',
-            parent=styles['Heading1'],
-            fontSize=18,
-            textColor=colors.HexColor('#0275d8'),
-            spaceAfter=4
-        )
-        subtitle_style = ParagraphStyle(
-            'SubTitle',
-            parent=styles['Normal'],
-            fontSize=10,
-            textColor=colors.HexColor('#666666'),
-            spaceAfter=15
-        )
-        h2_style = ParagraphStyle(
-            'SectionHeader',
-            parent=styles['Heading2'],
-            fontSize=14,
-            textColor=colors.HexColor('#333333'),
-            spaceBefore=12,
-            spaceAfter=6
-        )
+        title_style = ParagraphStyle('HeaderTitle', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#0275d8'), spaceAfter=4)
+        subtitle_style = ParagraphStyle('SubTitle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#666666'), spaceAfter=15)
+        h2_style = ParagraphStyle('SectionHeader', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#333333'), spaceBefore=12, spaceAfter=6)
 
         elements.append(Paragraph("Metasieve Analysis Summary", title_style))
         elements.append(Paragraph("Automated Dashboard Comprehensive Export", subtitle_style))
@@ -627,6 +659,9 @@ def server(input, output, session):
         if sizes:
             ax.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=140, colors=plt.cm.tab20c.colors[:len(sizes)], textprops={'fontsize': 7})
             ax.set_title("Dataset-Wide Taxonomic Breakdown", fontsize=9, fontweight="bold")
+        else:
+            ax.text(0.5, 0.5, "No taxonomic domain data available.", ha="center", va="center")
+            ax.axis("off")
         plt.tight_layout()
         kraken_pie_img = SNAPSHOT_DIR / "pdf_kraken_pie.png"
         fig.savefig(kraken_pie_img, dpi=150, bbox_inches='tight')
@@ -660,15 +695,43 @@ def server(input, output, session):
             elements.append(chart_table)
         elements.append(Spacer(1, 15))
 
-        # --- 2. SeqScreen Summary Section ---
+        # --- 2. SeqScreen Summary Section & Frame Plot ---
         elements.append(Paragraph("2. SeqScreen Analysis Summary", h2_style))
         seq_csv = CACHE_DIR / "seqscreen_processed.csv"
         if seq_csv.exists():
             df_s = pd.read_csv(seq_csv)
             if not df_s.empty:
                 total_q = len(df_s)
-                seq_summary_html = f"<b>Total Sequences Identified:</b> {total_q}"
-                elements.append(Paragraph(seq_summary_html, styles['Normal']))
+                mean_l = df_s["aa_length"].mean() if "aa_length" in df_s.columns else 0
+                elements.append(Paragraph(f"<b>Total Sequences Identified:</b> {total_q} | <b>Mean AA Length:</b> {mean_l:.1f} aa", styles['Normal']))
+                
+                # Generate frame analysis plot for PDF
+                sns.set_theme(style="whitegrid")
+                fig, axes = plt.subplots(2, 2, figsize=(10, 7))
+                frame_counts = df_s["frame"].value_counts().sort_index() if "frame" in df_s.columns else pd.Series()
+                if not frame_counts.empty:
+                    sns.barplot(x=frame_counts.index, y=frame_counts.values, ax=axes[0, 0], palette="Blues_d")
+                axes[0, 0].set_title("ORF Count by Frame", fontsize=9, fontweight="bold")
+                
+                if "strand" in df_s.columns and "frame" in df_s.columns:
+                    sns.countplot(data=df_s, x="frame", hue="strand", ax=axes[0, 1], palette="Set2")
+                axes[0, 1].set_title("Strand Breakdown", fontsize=9, fontweight="bold")
+                
+                if "aa_length" in df_s.columns and "frame" in df_s.columns:
+                    sns.boxplot(data=df_s, x="frame", y="aa_length", ax=axes[1, 0], palette="Pastel1")
+                axes[1, 0].set_title("AA Length Distribution", fontsize=9, fontweight="bold")
+                
+                axes[1, 1].axis("off")
+                axes[1, 1].text(0.1, 0.5, f"Total ORFs: {total_q:,}\nMean Length: {mean_l:.1f}aa", fontsize=9, family="monospace")
+                
+                plt.tight_layout()
+                seq_plot_img = SNAPSHOT_DIR / "pdf_seqscreen_frames.png"
+                fig.savefig(seq_plot_img, dpi=150, bbox_inches='tight')
+                plt.close(fig)
+                
+                if seq_plot_img.exists():
+                    elements.append(Spacer(1, 4))
+                    elements.append(Image(str(seq_plot_img), width=450, height=315))
         elements.append(Spacer(1, 15))
 
         # --- 3. ESMFold Structural Analysis Summary ---
@@ -677,7 +740,7 @@ def server(input, output, session):
         df_esm = pd.read_csv(csv_path) if csv_path.exists() else pd.DataFrame()
         total_esm_rows = len(df_esm)
         
-        elements.append(Paragraph(f"Final output of the ESM filtering resulted in identifying {total_esm_rows} number of de novo non-classified sequences.", styles['Normal']))
+        elements.append(Paragraph(f"Final output of the ESM filtering resulted in identifying {total_esm_rows} high-confidence de novo sequences.", styles['Normal']))
         elements.append(Spacer(1, 6))
 
         if not df_esm.empty:
@@ -699,7 +762,7 @@ def server(input, output, session):
             elements.append(t)
             elements.append(Spacer(1, 8))
 
-        elements.append(Paragraph("The full table with the data is downloaded in a separate CSV file.", styles['Normal']))
+        elements.append(Paragraph("The full table with the data is exported in a separate CSV file.", styles['Normal']))
         elements.append(Spacer(1, 15))
 
         # --- 4. Novel Protein Structure Prediction (ChimeraX Render) ---
