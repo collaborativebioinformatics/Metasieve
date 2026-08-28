@@ -1,12 +1,10 @@
 # Metasieve
 <img src="metasieve_logo.png" width="200">
+
 ## Overview of Metasieve
 
-Mining environmental metagenomes for deeply novel biological sequence and structure
-
-This is a metagenomic bioprospecting workflow designed to identify
-environmental DNA and protein sequences that remain unexplained after
-taxonomic, functional, and structural database searches.
+**MetaSieve** is a hierarchical metagenomic bioprospecting workflow designed to identify potentially novel proteins from short-read sequencing data. 
+The pipeline progressively filters assembled contigs using taxonomic classification, sequence- and function-based characterization, and structural similarity searching to enrich for ORFans and other proteins that remain poorly characterized even at the structural level.
 
 ## Team 
 Dr. Todd Treangen, Rice University\
