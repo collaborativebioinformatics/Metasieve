@@ -1,10 +1,11 @@
-"""Five-step Metasieve orchestrator.
+"""Six-step Metasieve orchestrator.
 
 1. Assembly (GGCAT unitigs)
 2. Taxonomic classification (Kraken2, with --unclassified-out)
 3. Optional length filter on Kraken2 unclassified FASTA
 4. Functional screening (SeqScreen fast) + ORF extraction from unexplained unitigs
 5. Structure prediction (Hugging Face ESMFold)
+6. Structural search (Foldseek) + novelty report
 
 Earlier steps can be skipped by supplying an intermediate FASTA
 (``--unitigs``, ``--unclassified``, or ``--orfs``).
@@ -25,6 +26,7 @@ from metasieve.parsers import (
     extract_seqscreen_orfs,
     filter_fasta_min_length,
     prepare_orf_fastas,
+    write_foldseek_novelty_report,
     write_orf_manifest_from_fastas,
 )
 from metasieve.samples import (
@@ -80,6 +82,7 @@ class Pipeline:
             return 1
         LOGGER.info("Pipeline complete. Results: %s", self.outdir)
         LOGGER.info("Structures: %s", self.outdir / "05_structures")
+        LOGGER.info("Foldseek: %s", self.outdir / "06_foldseek")
         return 0
 
     def run_sample(self, sample: SampleReads) -> None:
@@ -97,7 +100,7 @@ class Pipeline:
             return
 
         seq_dir = self._step_dir("04_seqscreen", prefix)
-        LOGGER.info("[4/5] Functional screening (SeqScreen --mode %s)", self.config.seqscreen_mode)
+        LOGGER.info("[4/6] Functional screening (SeqScreen --mode %s)", self.config.seqscreen_mode)
         seqscreen_work = self.tools.seqscreen(
             fasta=unclassified_fasta,
             db=self.config.seqscreen_db,  # type: ignore[arg-type]
@@ -106,7 +109,7 @@ class Pipeline:
             mode=self.config.seqscreen_mode,
             extra_args=self.config.seqscreen_extra_args,
         )
-        LOGGER.info("[4/4] Extracting ORFs from SeqScreen-unexplained unitigs")
+        LOGGER.info("[4/6] Extracting ORFs from SeqScreen-unexplained unitigs")
         orfs = extract_seqscreen_orfs(
             sample_id=prefix,
             unclassified_fasta=unclassified_fasta,
@@ -135,7 +138,7 @@ class Pipeline:
             LOGGER.warning("Sample %s: no ORFs; skipping structure prediction", prefix)
             return
 
-        #self._fold_and_track(prefix, orfs.split_fastas, orfs.manifest, struct_root)
+        self._fold_and_track(prefix, orfs.split_fastas, orfs.manifest, struct_root)
 
     def _unclassified_fasta(
         self, sample: SampleReads, prefix: str, start: str
@@ -144,12 +147,12 @@ class Pipeline:
             source = sample.unclassified
             if source is None:
                 raise PipelineError(f"Sample {prefix} has no --unclassified FASTA")
-            LOGGER.info("[1/5] Assembly skipped (starting from unclassified FASTA)")
-            LOGGER.info("[2/5] Kraken2 skipped (starting from unclassified FASTA)")
+            LOGGER.info("[1/6] Assembly skipped (starting from unclassified FASTA)")
+            LOGGER.info("[2/6] Kraken2 skipped (starting from unclassified FASTA)")
             return self._filter_unclassified(source, prefix)
 
         unitigs = self._unitigs_fasta(sample, prefix, start)
-        LOGGER.info("[2/5] Taxonomic classification (Kraken2 --unclassified-out)")
+        LOGGER.info("[2/6] Taxonomic classification (Kraken2 --unclassified-out)")
         class_dir = self._step_dir("02_classification", prefix)
         _assignments, _report, unclassified_raw = self.tools.kraken2(
             contigs=unitigs,
@@ -168,12 +171,12 @@ class Pipeline:
             source = sample.unitigs
             if source is None:
                 raise PipelineError(f"Sample {prefix} has no --unitigs FASTA")
-            LOGGER.info("[1/5] Assembly skipped (starting from unitigs FASTA)")
+            LOGGER.info("[1/6] Assembly skipped (starting from unitigs FASTA)")
             if source.resolve() != published.resolve():
                 shutil.copy2(source, published)
             return published
 
-        LOGGER.info("[1/5] Assembly (GGCAT unitigs)")
+        LOGGER.info("[1/6] Assembly (GGCAT unitigs)")
         if sample.r1 is None or sample.r2 is None:
             raise PipelineError(f"Sample {prefix} is missing paired reads")
         unitigs = self.tools.ggcat(
@@ -192,7 +195,7 @@ class Pipeline:
         return published
 
     def _filter_unclassified(self, source: Path, prefix: str) -> Path | None:
-        LOGGER.info("[3/5] Preparing unclassified unitigs for SeqScreen")
+        LOGGER.info("[3/6] Preparing unclassified unitigs for SeqScreen")
         filter_dir = self._step_dir("03_filtering", prefix)
         unclassified_fasta = filter_dir / f"{prefix}.unclassified.fasta"
         n_unclassified = filter_fasta_min_length(
@@ -212,10 +215,10 @@ class Pipeline:
         source = sample.orfs
         if source is None:
             raise PipelineError(f"Sample {prefix} has no --orfs input")
-        LOGGER.info("[1/5] Assembly skipped (starting from ORFs)")
-        LOGGER.info("[2/5] Kraken2 skipped (starting from ORFs)")
-        LOGGER.info("[3/5] Length filter skipped (starting from ORFs)")
-        LOGGER.info("[4/5] SeqScreen skipped (starting from ORFs)")
+        LOGGER.info("[1/6] Assembly skipped (starting from ORFs)")
+        LOGGER.info("[2/6] Kraken2 skipped (starting from ORFs)")
+        LOGGER.info("[3/6] Length filter skipped (starting from ORFs)")
+        LOGGER.info("[4/6] SeqScreen skipped (starting from ORFs)")
         seq_dir = self._step_dir("04_seqscreen", prefix)
         split_fastas = prepare_orf_fastas(source, seq_dir / "orfs_split")
         manifest = seq_dir / f"{prefix}.orf_manifest.csv"
@@ -242,18 +245,76 @@ class Pipeline:
         orf_manifest: Path,
         struct_root: Path,
     ) -> None:
-        LOGGER.info("[5/5] Structure prediction (Hugging Face ESMFold, %d ORFs)", len(split_fastas))
+        LOGGER.info("[5/6] Structure prediction (Hugging Face ESMFold, %d ORFs)", len(split_fastas))
         sidecars, structures = self._fold_orfs(prefix, split_fastas, struct_root)
         tracked_dir = struct_root / "tracked_structures"
         manifest = struct_root / f"{prefix}.structures_manifest.csv"
-        build_structure_manifest(
-            orf_manifest=orf_manifest,
-            output_manifest=manifest,
-            output_dir=tracked_dir,
-            sidecar_paths=sidecars,
-            structure_paths=structures,
+        if structures or sidecars:
+            build_structure_manifest(
+                orf_manifest=orf_manifest,
+                output_manifest=manifest,
+                output_dir=tracked_dir,
+                sidecar_paths=sidecars,
+                structure_paths=structures,
+            )
+            LOGGER.info("Tracking CSV: %s", manifest)
+        else:
+            LOGGER.warning("Sample %s: no structures produced; skipping Foldseek", prefix)
+            return
+        self._run_foldseek(prefix, structures)
+
+    def _run_foldseek(self, prefix: str, structures: list[Path]) -> None:
+        cfg = self.config
+        if cfg.skip_foldseek:
+            LOGGER.info("Skipping Foldseek (--skip_foldseek)")
+            return
+        if cfg.foldseek_db is None:
+            LOGGER.warning("No --foldseek_db; skipping Foldseek")
+            return
+        if not structures:
+            LOGGER.warning("Sample %s: no PDBs for Foldseek", prefix)
+            return
+
+        LOGGER.info("[6/6] Structural search (Foldseek, %d PDBs)", len(structures))
+        fold_dir = self._step_dir("06_foldseek", prefix)
+        query_dir = fold_dir / "query_pdbs"
+        if query_dir.exists() and cfg.force:
+            shutil.rmtree(query_dir)
+        query_dir.mkdir(parents=True, exist_ok=True)
+        for pdb in structures:
+            dest = query_dir / pdb.name
+            if not dest.exists() or cfg.force:
+                shutil.copy2(pdb, dest)
+
+        hits = self.tools.foldseek(
+            query=query_dir,
+            db=cfg.foldseek_db,
+            outdir=fold_dir,
+            prefix=prefix,
+            threads=cfg.threads,
+            evalue=cfg.foldseek_evalue,
+            sensitivity=cfg.foldseek_sensitivity,
+            max_seqs=cfg.foldseek_max_seqs,
+            alignment_type=cfg.foldseek_alignment_type,
+            force=cfg.force,
         )
-        LOGGER.info("Tracking CSV: %s", manifest)
+        stats = write_foldseek_novelty_report(
+            sample_id=prefix,
+            structure_paths=structures,
+            foldseek_m8=hits,
+            output_report=fold_dir / f"{prefix}.foldseek_novelty.csv",
+            output_novel_ids=fold_dir / f"{prefix}.novel_structures.txt",
+            evalue_cutoff=cfg.foldseek_evalue,
+        )
+        (fold_dir / f"{prefix}.foldseek_stats.json").write_text(
+            json.dumps(stats, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        LOGGER.info(
+            "Foldseek novel structures: %d / %d",
+            stats["novel_structures"],
+            stats["structures"],
+        )
 
     def _fold_orfs(
         self,

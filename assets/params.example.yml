@@ -12,6 +12,7 @@ outdir: results
 
 kraken_db: /data/dbs/kraken2
 seqscreen_db: /data/dbs/seqscreen_databases
+foldseek_db: /data/dbs/foldseek/pdb
 
 # Hugging Face ESMFold (facebook/esmfold_v1 by default).
 # Use a local snapshot path for fully offline runs.
@@ -27,6 +28,10 @@ max_orf_aa: 1024
 require_orf_start: true
 
 skip_esmfold: false
+skip_foldseek: false
+foldseek_evalue: 0.001
+foldseek_sensitivity: 9.5
+foldseek_max_seqs: 100
 
 threads: 16
 memory_gb: 64

@@ -25,8 +25,9 @@ Mohamed Abdelrahim
 | Assembly        | [GGCAT](https://github.com/algbio/GGCAT) | Paired-end short reads → maximal unitigs (`unitigs.fasta`) |
 | Taxonomy        | [Kraken2](https://github.com/DerrickWood/kraken2/) | `--unclassified-out` FASTA is fed to SeqScreen |
 | Functions       | [Seqscreen](https://gitlab.com/treangenlab/seqscreen) | Fast mode; keep queries with no taxid and no UniRef/UniProt hit |
-| (WIP) Structure | Hugging Face [ESMFold](https://esmatlas.com/) | `transformers` + PyTorch; default `facebook/esmfold_v1` |
-| Orchestration   | Python ≥ 3.10 | Host binaries on PATH (`ggcat`, `kraken2`, `seqscreen`) |
+| Structure       | Hugging Face [ESMFold](https://esmatlas.com/) | `transformers` + PyTorch; default `facebook/esmfold_v1` |
+| Structure search| [Foldseek](https://github.com/steineggerlab/foldseek) | Search predicted PDBs vs PDB/AFDB; report structural novelty |
+| Orchestration   | Python ≥ 3.10 | Host binaries on PATH (`ggcat`, `kraken2`, `seqscreen`, `foldseek`) |
 
 
 
@@ -34,9 +35,9 @@ Raw paired-end short reads are assembled into unitigs and classified with
 Kraken2. Unclassified sequences come from Kraken2 `--unclassified-out` and
 are screened with SeqScreen (fast mode). Only queries that SeqScreen did
 not assign a taxid **and** did not hit UniRef/UniProt are six-frame
-translated. Those protein sequences are folded with Hugging Face ESMFold.
-Every PDB is named and indexed so it traces back to the originating unitig
-and ORF.
+translated. Those protein sequences are folded with Hugging Face ESMFold,
+then searched with Foldseek. Structures with no significant Foldseek hit
+are reported as novel.
 
 
 <img src="images/metasieve_workflow.png" width="750">
@@ -84,8 +85,23 @@ python main.py \
     --reads 'data/*_{1,2}.fastq.gz' \
     --kraken_db /data/dbs/kraken2 \
     --seqscreen_db /data/dbs/seqscreen_databases \
+    --foldseek_db /data/dbs/foldseek/pdb \
+    --esmfold_cache /data/models/huggingface \
+    --esmfold_device auto \
     --threads 16 \
     --outdir results
+```
+
+On HPC without folding yet, stop after ORFs:
+
+```bash
+python main.py ... --skip_esmfold --skip_foldseek
+```
+
+Or fold only, then search:
+
+```bash
+python main.py --orfs sample.orfs.faa --foldseek_db /data/dbs/foldseek/pdb --outdir results
 ```
 
 ## Dashboard Summary 

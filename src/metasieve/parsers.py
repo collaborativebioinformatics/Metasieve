@@ -1454,3 +1454,163 @@ def build_structure_manifest(
 
     LOGGER.info("Indexed %d structures -> %s", len(rows), output_manifest)
     return output_manifest
+
+
+# ---------------------------------------------------------------------------
+# Foldseek novelty
+# ---------------------------------------------------------------------------
+
+
+FOLDSEEK_DEFAULT_COLUMNS = (
+    "query",
+    "target",
+    "fident",
+    "alnlen",
+    "mismatch",
+    "gapopen",
+    "qstart",
+    "qend",
+    "tstart",
+    "tend",
+    "evalue",
+    "bits",
+    "alntmscore",
+    "qtmscore",
+    "ttmscore",
+    "prob",
+)
+
+
+def _foldseek_query_id(raw: str) -> str:
+    name = Path(str(raw).strip()).name
+    for suffix in (
+        ".esmfold.pdb",
+        ".pdb",
+        ".cif",
+        ".mmcif",
+        ".ent",
+        ".faa",
+        ".fasta",
+        ".fa",
+    ):
+        if name.lower().endswith(suffix):
+            return name[: -len(suffix)]
+    return Path(name).stem
+
+
+def write_foldseek_novelty_report(
+    *,
+    sample_id: str,
+    structure_paths: Sequence[Path],
+    foldseek_m8: Path,
+    output_report: Path,
+    output_novel_ids: Path,
+    evalue_cutoff: float = 0.001,
+    columns: Sequence[str] = FOLDSEEK_DEFAULT_COLUMNS,
+) -> dict[str, Any]:
+    """Mark structures with no significant Foldseek hit as structurally novel.
+
+    A query is novel when it has no hit with ``evalue <= evalue_cutoff``.
+    """
+    foldseek_m8 = Path(foldseek_m8)
+    output_report = Path(output_report)
+    output_novel_ids = Path(output_novel_ids)
+    output_report.parent.mkdir(parents=True, exist_ok=True)
+    output_novel_ids.parent.mkdir(parents=True, exist_ok=True)
+
+    best_hit: dict[str, dict[str, str]] = {}
+    if foldseek_m8.is_file() and foldseek_m8.stat().st_size > 0:
+        with foldseek_m8.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("\t")
+                if len(parts) < 12:
+                    continue
+                row = {
+                    columns[i] if i < len(columns) else f"col{i}": parts[i]
+                    for i in range(len(parts))
+                }
+                query = _foldseek_query_id(row.get("query", parts[0]))
+                try:
+                    evalue = float(row.get("evalue", parts[10]))
+                except ValueError:
+                    continue
+                prev = best_hit.get(query)
+                if prev is None:
+                    best_hit[query] = row
+                    continue
+                try:
+                    prev_e = float(prev.get("evalue", "inf"))
+                except ValueError:
+                    prev_e = float("inf")
+                if evalue < prev_e:
+                    best_hit[query] = row
+
+    fieldnames = [
+        "sample_id",
+        "record_id",
+        "structure_file",
+        "novel",
+        "best_target",
+        "best_evalue",
+        "best_bits",
+        "best_alntmscore",
+        "best_qtmscore",
+        "best_prob",
+    ]
+    rows: list[dict[str, Any]] = []
+    novel_ids: list[str] = []
+    for path in structure_paths:
+        path = Path(path)
+        record_id = _foldseek_query_id(path.name)
+        hit = best_hit.get(record_id)
+        evalue = None
+        if hit is not None:
+            try:
+                evalue = float(hit.get("evalue", ""))
+            except ValueError:
+                evalue = None
+        is_novel = hit is None or evalue is None or evalue > float(evalue_cutoff)
+        if is_novel:
+            novel_ids.append(record_id)
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "record_id": record_id,
+                "structure_file": str(path),
+                "novel": "yes" if is_novel else "no",
+                "best_target": (hit or {}).get("target", ""),
+                "best_evalue": (hit or {}).get("evalue", ""),
+                "best_bits": (hit or {}).get("bits", ""),
+                "best_alntmscore": (hit or {}).get("alntmscore", ""),
+                "best_qtmscore": (hit or {}).get("qtmscore", ""),
+                "best_prob": (hit or {}).get("prob", ""),
+            }
+        )
+
+    with output_report.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    output_novel_ids.write_text(
+        "".join(f"{rid}\n" for rid in novel_ids),
+        encoding="utf-8",
+    )
+    stats = {
+        "sample_id": sample_id,
+        "structures": len(rows),
+        "novel_structures": len(novel_ids),
+        "known_structures": len(rows) - len(novel_ids),
+        "evalue_cutoff": evalue_cutoff,
+        "foldseek_m8": str(foldseek_m8),
+        "novelty_report": str(output_report),
+    }
+    LOGGER.info(
+        "Foldseek novelty: %d novel / %d structures -> %s",
+        len(novel_ids),
+        len(rows),
+        output_report,
+    )
+    return stats

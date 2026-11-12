@@ -26,9 +26,10 @@ def build_parser() -> argparse.ArgumentParser:
         prog="metasieve",
         description=(
             "Metasieve — assemble paired-end reads into GGCAT unitigs, keep "
-            "Kraken2-unclassified sequences, screen with SeqScreen (fast), and "
-            "fold ORFs with Hugging Face ESMFold. Supply --unitigs, "
-            "--unclassified, or --orfs to skip earlier steps."
+            "Kraken2-unclassified sequences, screen with SeqScreen (fast), "
+            "fold ORFs with Hugging Face ESMFold, and search structures with "
+            "Foldseek. Supply --unitigs, --unclassified, or --orfs to skip "
+            "earlier steps."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -89,6 +90,14 @@ def build_parser() -> argparse.ArgumentParser:
     dbs.add_argument("--kraken_db", "--kraken-db", dest="kraken_db", type=Path, default=None)
     dbs.add_argument(
         "--seqscreen_db", "--seqscreen-db", dest="seqscreen_db", type=Path, default=None
+    )
+    dbs.add_argument(
+        "--foldseek_db",
+        "--foldseek-db",
+        dest="foldseek_db",
+        type=Path,
+        default=None,
+        help="Foldseek database path/prefix (PDB, AFDB, or a PDB directory).",
     )
     dbs.add_argument(
         "--esmfold_model",
@@ -156,9 +165,53 @@ def build_parser() -> argparse.ArgumentParser:
     tools.add_argument("--esmfold_num_recycles", dest="esmfold_num_recycles", type=int, default=None)
     tools.add_argument("--esmfold_chunk_size", dest="esmfold_chunk_size", type=int, default=None)
     tools.add_argument("--skip_esmfold", dest="skip_esmfold", action="store_true", default=None)
+    tools.add_argument(
+        "--skip_foldseek",
+        dest="skip_foldseek",
+        action="store_true",
+        default=None,
+        help="Stop after ESMFold (or after ORFs if --skip_esmfold).",
+    )
+    tools.add_argument(
+        "--foldseek_evalue",
+        "--foldseek-evalue",
+        dest="foldseek_evalue",
+        type=float,
+        default=None,
+        help="Foldseek -e cutoff; also used for novelty (default: 0.001).",
+    )
+    tools.add_argument(
+        "--foldseek_sensitivity",
+        "--foldseek-sensitivity",
+        dest="foldseek_sensitivity",
+        type=float,
+        default=None,
+        help="Foldseek -s sensitivity (default: 9.5).",
+    )
+    tools.add_argument(
+        "--foldseek_max_seqs",
+        "--foldseek-max-seqs",
+        dest="foldseek_max_seqs",
+        type=int,
+        default=None,
+        help="Foldseek --max-seqs (default: 100).",
+    )
+    tools.add_argument(
+        "--foldseek_alignment_type",
+        "--foldseek-alignment-type",
+        dest="foldseek_alignment_type",
+        type=int,
+        default=None,
+        help="Foldseek --alignment-type (default: 2 = 3Di+AA).",
+    )
 
     runtime = parser.add_argument_group("runtime")
-    runtime.add_argument("--threads", type=int, default=None, help="CPU threads for GGCAT/Kraken2/SeqScreen.")
+    runtime.add_argument(
+        "--threads",
+        type=int,
+        default=None,
+        help="CPU threads for GGCAT/Kraken2/SeqScreen/Foldseek.",
+    )
     runtime.add_argument(
         "--memory_gb",
         "--memory-gb",
