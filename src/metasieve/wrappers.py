@@ -313,6 +313,74 @@ class ToolRunner:
         LOGGER.info("SeqScreen working dir: %s", working)
         return working
 
+    # ── Step 6: Foldseek ──────────────────────────────────────────────────
+
+    def foldseek(
+        self,
+        *,
+        query: Path,
+        db: Path,
+        outdir: Path,
+        prefix: str,
+        threads: int,
+        evalue: float = 0.001,
+        sensitivity: float = 9.5,
+        max_seqs: int = 100,
+        alignment_type: int = 2,
+        format_output: str = (
+            "query,target,fident,alnlen,mismatch,gapopen,qstart,qend,"
+            "tstart,tend,evalue,bits,alntmscore,qtmscore,ttmscore,prob"
+        ),
+        force: bool = False,
+    ) -> Path:
+        """Search predicted structures against a Foldseek database (PDB/AFDB)."""
+        query = query.resolve()
+        db = db.resolve()
+        outdir = outdir.resolve()
+        outdir.mkdir(parents=True, exist_ok=True)
+        if not query.exists():
+            raise ToolError(f"Foldseek query path not found: {query}")
+
+        hits = outdir / f"{prefix}.foldseek.m8"
+        tmp = outdir / "foldseek_tmp"
+        if hits.is_file() and hits.stat().st_size > 0 and not force:
+            LOGGER.info("Reusing existing Foldseek hits: %s", hits)
+            return hits
+        if tmp.exists() and force:
+            shutil.rmtree(tmp)
+        tmp.mkdir(parents=True, exist_ok=True)
+
+        argv = [
+            "foldseek",
+            "easy-search",
+            str(query),
+            str(db),
+            str(hits),
+            str(tmp),
+            "--threads",
+            str(threads),
+            "-e",
+            str(evalue),
+            "-s",
+            str(sensitivity),
+            "--max-seqs",
+            str(max_seqs),
+            "--alignment-type",
+            str(alignment_type),
+            "--format-output",
+            format_output,
+        ]
+        self._run(
+            argv,
+            workdir=outdir,
+            log_prefix="foldseek",
+        )
+        if not hits.is_file():
+            hits.write_text("", encoding="utf-8")
+            LOGGER.warning("Foldseek wrote no hits file; treating as empty: %s", hits)
+        LOGGER.info("Foldseek hits: %s", hits)
+        return hits
+
 
 def _ggcat_output_fasta(raw: Path) -> Path | None:
     """Return the GGCAT FASTA path, including a possible ``.lz4`` suffix."""

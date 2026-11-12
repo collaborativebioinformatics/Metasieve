@@ -35,6 +35,12 @@ class PipelineConfig:
     esmfold_num_recycles: int = 4
     esmfold_chunk_size: int = 128
     skip_esmfold: bool = False
+    foldseek_db: Path | None = None
+    skip_foldseek: bool = False
+    foldseek_evalue: float = 0.001
+    foldseek_sensitivity: float = 9.5
+    foldseek_max_seqs: int = 100
+    foldseek_alignment_type: int = 2
     unitigs: str | None = None
     unclassified: str | None = None
     orfs: str | None = None
@@ -127,10 +133,33 @@ class PipelineConfig:
         self.ggcat_kmer = int(self.ggcat_kmer)
         self.ggcat_min_multiplicity = int(self.ggcat_min_multiplicity)
 
+        if self.skip_esmfold and not self.skip_foldseek:
+            LOGGER.info("ESMFold skipped; Foldseek will also be skipped (no PDBs to search)")
+            self.skip_foldseek = True
+
+        if (
+            not self.skip_esmfold
+            and not self.skip_foldseek
+            and self.foldseek_db is None
+            and self.start_from in {
+                START_ASSEMBLY,
+                START_CLASSIFICATION,
+                START_UNCLASSIFIED,
+                START_FOLDING,
+            }
+        ):
+            raise PipelineError(
+                "Missing required parameter: --foldseek_db "
+                "(or pass --skip_foldseek / --skip_esmfold)"
+            )
+
         if self.start_from in {START_ASSEMBLY, START_CLASSIFICATION}:
             _require_dir(self.kraken_db, "--kraken_db")
         if self.start_from != START_FOLDING:
             _require_dir(self.seqscreen_db, "--seqscreen_db")
+        if self.foldseek_db is not None and not self.skip_foldseek:
+            self.foldseek_db = self.foldseek_db.expanduser()
+            _require_foldseek_db(self.foldseek_db, "--foldseek_db")
         if self.esmfold_cache is not None:
             self.esmfold_cache = self.esmfold_cache.expanduser()
             self.esmfold_cache.mkdir(parents=True, exist_ok=True)
@@ -150,6 +179,21 @@ def _require_dir(path: Path | None, flag: str) -> None:
         return
     if not path.is_dir():
         raise PipelineError(f"{flag} is not a directory: {path}")
+
+
+def _require_foldseek_db(path: Path, flag: str) -> None:
+    """Foldseek DBs are a path prefix (files ``db``, ``db.index``, …) or a PDB dir."""
+    if path.is_dir():
+        return
+    if path.is_file():
+        return
+    parent = path.parent
+    prefix = path.name
+    if parent.is_dir() and any(child.name.startswith(prefix) for child in parent.iterdir()):
+        return
+    raise PipelineError(
+        f"{flag} not found as a directory or Foldseek DB prefix: {path}"
+    )
 
 
 def _coerce_path(value: Any) -> Path | None:
@@ -173,11 +217,13 @@ PATH_FIELDS = {
     "kraken_db",
     "seqscreen_db",
     "esmfold_cache",
+    "foldseek_db",
 }
 
 BOOL_FIELDS = {
     "require_orf_start",
     "skip_esmfold",
+    "skip_foldseek",
     "force",
 }
 
