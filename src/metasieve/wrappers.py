@@ -286,6 +286,8 @@ class ToolRunner:
         working = workdir / "seqscreen_out"
         working.mkdir(parents=True, exist_ok=True)
 
+        # Real SeqScreen CLI has no --mode; map MetaSieve modes to flags.
+        mode_norm = (mode or "fast").strip().lower()
         argv = [
             "seqscreen",
             "--fasta",
@@ -296,9 +298,15 @@ class ToolRunner:
             str(working),
             "--threads",
             str(threads),
-            "--mode",
-            mode,
         ]
+        if mode_norm in {"sensitive", "sensitivity"}:
+            argv.append("--sensitive")
+        elif mode_norm in {"ont", "nanopore"}:
+            argv.append("--ont")
+        elif mode_norm not in {"fast", "default", ""}:
+            raise ToolError(
+                f"Unsupported SeqScreen mode {mode!r}; expected fast, sensitive, or ont"
+            )
         if extra_args:
             argv.extend(shlex.split(extra_args))
         canonical = working / "report_generation" / "seqscreen_report.tsv"

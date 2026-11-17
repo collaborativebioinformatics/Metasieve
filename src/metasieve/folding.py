@@ -128,7 +128,21 @@ class ESMFoldPredictor:
 
         try:
             with context:
-                output = self._model.infer(sequence, num_recycles=self.num_recycles)
+                # transformers>=4.46 dropped num_recycles from infer(); set on
+                # config when available, otherwise call infer(sequence) only.
+                infer_kwargs: dict = {}
+                try:
+                    import inspect
+
+                    params = inspect.signature(self._model.infer).parameters
+                    if "num_recycles" in params:
+                        infer_kwargs["num_recycles"] = self.num_recycles
+                    elif hasattr(self._model, "config"):
+                        if hasattr(self._model.config, "num_recycles"):
+                            self._model.config.num_recycles = self.num_recycles
+                except (TypeError, ValueError):
+                    pass
+                output = self._model.infer(sequence, **infer_kwargs)
             pdb_text = self._model.output_to_pdb(output)[0]
         except Exception as exc:
             raise ToolError(f"Hugging Face ESMFold inference failed: {exc}") from exc
